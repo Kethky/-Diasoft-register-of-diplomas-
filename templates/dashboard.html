@@ -537,15 +537,19 @@ body.dark .report-btn {
                         resultDiv.className = 'result invalid';
                         resultDiv.innerHTML = `❌ ${data.message}`;
                     } else if (data.valid) {
-                        resultDiv.className = 'result valid';
-                        resultDiv.innerHTML = `
-                            ${data.message}
-                            <div class="result-details">
-                                ФИО: ${escapeHtml(data.full_name)}<br>
-                                Год выпуска: ${data.graduation_year}<br>
-                                Специальность: ${escapeHtml(data.specialty)}
-                            </div>
-                        `;
+    resultDiv.className = 'result valid';
+    resultDiv.innerHTML = `
+        ${data.message}
+        <div class="result-details">
+            ФИО: ${escapeHtml(data.full_name)}<br>
+            Год выпуска: ${data.graduation_year}<br>
+            Специальность: ${escapeHtml(data.specialty)}
+        </div>
+        <button class="report-btn"
+                onclick="reportSuspiciousAction(${data.university_code}, '${String(data.diploma_number).replace(/'/g, "\\'")}')">
+            Сообщить о подозрительных действиях
+        </button>
+    `;
                     } else {
                         resultDiv.className = 'result invalid';
                         resultDiv.innerHTML = `${data.message}`;
