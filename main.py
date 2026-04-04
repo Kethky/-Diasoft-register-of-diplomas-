@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 Главный файл системы проверки дипломов
 Включает управление ВУЗами, студентами, дипломами, QR-кодами,
@@ -433,6 +431,7 @@ def api_report_suspicious_activity():
         }), 400
 
     result = check_diploma_by_params(university_code, diploma_number)
+    
 
     if not result.get('found'):
         return jsonify({
@@ -737,6 +736,12 @@ def api_search_diploma():
         return jsonify({"error": "Не указан код вуза или номер диплома"}), 400
 
     result = check_diploma_by_params(university_code, diploma_number)
+
+    if result.get("found"):
+        result["university_code"] = university_code
+        result["diploma_number"] = diploma_number
+
+    return jsonify(result)
 
     # === ЛОГИРОВАНИЕ ===
     # Получаем diploma_id
