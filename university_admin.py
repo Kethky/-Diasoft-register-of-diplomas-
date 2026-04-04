@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 Утилита для управления ВУЗами и просмотра логов безопасности
 Консольное приложение с меню:
@@ -20,9 +18,31 @@ import os
 from datetime import datetime
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "database", "diploma_platform.db")
-
+SUSPICIOUS_REPORTS_LOG = os.path.join(os.path.dirname(__file__), "suspicious_reports.log")
 
 # ---------- Вспомогательные функции ----------
+def show_suspicious_reports(limit: int = 50):
+    """Показывает сообщения из suspicious_reports.log"""
+    if not os.path.exists(SUSPICIOUS_REPORTS_LOG):
+        print("\nФайл suspicious_reports.log не найден.")
+        return
+
+    with open(SUSPICIOUS_REPORTS_LOG, "r", encoding="utf-8") as f:
+        lines = [line.strip() for line in f if line.strip()]
+
+    if not lines:
+        print("\nФайл suspicious_reports.log пуст.")
+        return
+
+    print("\n" + "=" * 90)
+    print("ПОДОЗРИТЕЛЬНЫЕ СООБЩЕНИЯ ИЗ suspicious_reports.log")
+    print("=" * 90)
+
+    for idx, line in enumerate(lines[-limit:], start=1):
+        print(f"{idx}. {line}")
+
+    print("=" * 90)
+
 def transliterate(text: str) -> str:
     """Простая транслитерация кириллицы в латиницу"""
     cyrillic = 'абвгдеёжзийклмнопрстуфхцчшщъыьэюя'
@@ -251,6 +271,7 @@ def show_verification_logs():
 # ---------- Главное меню ----------
 def main():
     # Проверка существования таблиц
+    show_suspicious_reports()
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='universities'")
