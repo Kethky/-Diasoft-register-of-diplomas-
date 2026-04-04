@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ДипломРеестр - Проверка дипломов</title>
+    <style>
+        :root {
+            --primary: #2b78e4;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #1e293b;
+            --text-secondary: #64748b;
+            --border: #f1f5f9;
+            --header-bg: #ffffff;
+            --result-valid-bg: #dcfce7;
+            --result-valid-text: #166534;
+            --result-invalid-bg: #fee2e2;
+            --result-invalid-text: #991b1b;
+            --btn-share-bg: #f1f5f9;
+            --btn-share-text: #333;
+            --dropdown-bg: #ffffff;
+            --dropdown-hover: #f8fafc;
+            --bg-image: url('/static/png/lightbg.png');
+        }
+        
+        body.dark {
+            --primary: #3b82f6;
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --text: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border: #334155;
+            --header-bg: #1e293b;
+            --result-valid-bg: #064e3b;
+            --result-valid-text: #86efac;
+            --result-invalid-bg: #7f1d1d;
+            --result-invalid-text: #fca5a5;
+            --btn-share-bg: #334155;
+            --btn-share-text: #e2e8f0;
+            --dropdown-bg: #334155;
+            --dropdown-hover: #475569;
+            --bg-image: url('/static/png/darkbg.png');
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease; }
+        
+        body { 
+            background: var(--bg);
+            background-image: var(--bg-image);
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+            color: var(--text);
+        }
+        
+        header { 
+            background: var(--header-bg); 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
+            padding: 15px 30px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            border-bottom: 1px solid var(--border);
+        }
+        .logo { 
+            display: flex; 
+            align-items: center; 
+            gap: 10px;
+        }
+        .logo span { 
+            font-size: 22px; 
+            font-weight: 700; 
+            color: var(--primary); 
+        }
+        .logo img {
+            height: 32px;
+            width: auto;
+        }
+        .header-right { 
+            display: flex; 
+            gap: 15px; 
+            align-items: center; 
+        }
+        .login-header-btn { 
+            background: var(--primary); 
+            color: white; 
+            padding: 8px 20px; 
+            border-radius: 8px; 
+            text-decoration: none; 
+            font-size: 14px; 
+            font-weight: 600; 
+            transition: 0.2s; 
+        }
+        .login-header-btn:hover { 
+            opacity: 0.9; 
+            transform: translateY(-1px); 
+        }
+        .theme-toggle {
+            background: var(--btn-share-bg);
+            border: none;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s;
+        }
+        .theme-toggle img {
+            width: 20px;
+            height: 20px;
+        }
+        .theme-toggle:hover { transform: scale(1.05); opacity: 0.9; }
+        main { max-width: 800px; margin: 40px auto; padding: 0 20px; }
+        .card { background: var(--card-bg); border-radius: 24px; padding: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid var(--border); }
+        h2 { margin-bottom: 24px; color: var(--text); }
+        .mode-switch { display: flex; gap: 12px; margin-bottom: 24px; border-bottom: 2px solid var(--border); }
+        .mode-btn { background: none; border: none; padding: 10px 20px; font-size: 16px; cursor: pointer; color: var(--text-secondary); transition: 0.2s; }
+        .mode-btn.active { color: var(--primary); border-bottom: 2px solid var(--primary); margin-bottom: -2px; }
+        .hidden { display: none; }
+        .label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; color: var(--text-secondary); }
+        .uni-select-trigger { border: 2px solid var(--border); border-radius: 12px; padding: 14px; display: flex; justify-content: space-between; cursor: pointer; background: var(--card-bg); color: var(--text); }
+        .uni-select-trigger:hover { border-color: var(--primary); }
+        .uni-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: var(--dropdown-bg); border: 1px solid var(--border); border-radius: 12px; margin-top: 4px; display: none; z-index: 100; max-height: 250px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .uni-dropdown.show { display: block; }
+        .uni-item { padding: 12px 14px; cursor: pointer; transition: 0.1s; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; color: var(--text); }
+        .uni-item:hover { background: var(--dropdown-hover); }
+        .uni-item-code { color: var(--text-secondary); font-size: 12px; }
+        .selected-view { display: none; justify-content: space-between; align-items: center; background: var(--dropdown-hover); border-radius: 12px; padding: 12px 16px; margin-bottom: 20px; }
+        .qr-area { border: 2px dashed var(--border); border-radius: 20px; padding: 40px; text-align: center; cursor: pointer; margin-bottom: 20px; background: var(--bg); transition: 0.2s; }
+        .qr-area:hover { border-color: var(--primary); background: var(--dropdown-hover); }
+        .submit-btn { background: var(--primary); color: white; border: none; width: 100%; padding: 14px; border-radius: 14px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 10px; }
+        .submit-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .result { margin-top: 20px; padding: 16px; border-radius: 12px; text-align: center; font-weight: 600; }
+        .result.valid { background: var(--result-valid-bg); color: var(--result-valid-text); }
+        .result.invalid { background: var(--result-invalid-bg); color: var(--result-invalid-text); }
+        .result-details { margin-top: 10px; font-size: 14px; font-weight: normal; color: var(--text-secondary); }
+        input[type="text"] { width: 100%; padding: 14px; border: 2px solid var(--border); border-radius: 12px; font-size: 14px; outline: none; background: var(--card-bg); color: var(--text); }
+        input[type="text"]:focus { border-color: var(--primary); }
+        .relative { position: relative; margin-bottom: 20px; }
+        .loading { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top: 2px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .hotkey-hint { position: fixed; bottom: 20px; right: 20px; background: var(--dropdown-bg); color: var(--text-secondary); padding: 8px 15px; border-radius: 20px; font-size: 12px; font-family: monospace; opacity: 0.7; border: 1px solid var(--border); }
+        .report-btn {
+    margin-top: 12px;
+    background: #B00000;
+    color: white;
+    border: none;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.report-btn:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+body.dark .report-btn {
+    background: #B00000;
+}
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <span>ДипломРеестр</span>
+            <img id="logoImg" src="/static/png/2.png" alt="Логотип">
+        </div>
+        <div class="header-right">
+            <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()">
+                <img src="/static/png/moon.png" alt="Тёмная тема" id="themeIcon">
+            </button>
+            <a href="/index" class="login-header-btn">Войти</a>
+        </div>
+    </header>
+    <main>
+        <div class="card">
+            <h2>Поиск диплома</h2>
+            <div class="mode-switch">
+                <button id="btn-num" class="mode-btn active" onclick="setMode('num')">По номеру</button>
+                <button id="btn-qr" class="mode-btn" onclick="setMode('qr')">Через QR</button>
+            </div>
+            <div id="input-num">
+                <label class="label">Учебное заведение</label>
+                <div class="relative">
+                    <div class="uni-select-trigger" id="uniTrigger" onclick="toggleDrop(event)">
+                        <span id="selectedUniName">Выберите ВУЗ...</span><span>▼</span>
+                    </div>
+                    <div class="uni-dropdown" id="uniDrop">
+                        <div style="padding: 12px; text-align: center; color: var(--text-secondary);">Загрузка...</div>
+                    </div>
+                </div>
+                <div id="selected-box" class="selected-view" style="display:none">
+                    <div><b id="res-name"></b><span id="res-code" style="font-size:12px; color:var(--text-secondary); margin-left:8px;"></span></div>
+                    <button onclick="resetUni()" style="color:var(--primary); background:none; border:1px solid; border-radius:6px; cursor:pointer; padding:4px 12px;">Изменить</button>
+                </div>
+                <label class="label">Номер диплома</label>
+                <input type="text" id="dip-num" placeholder="АБ 1234567">
+            </div>
+            <div id="input-qr" class="hidden">
+                <input type="file" id="file-in" class="hidden" accept="image/*" onchange="handleFile(event)">
+                <div class="qr-area" onclick="triggerFile()">
+                    <div id="qr-idle"><b>Нажмите для загрузки QR-кода</b></div>
+                    <div id="qr-active" class="hidden"><br><b id="fname"></b><br><button onclick="removeFile(event)" style="color:red; border:none; background:none; cursor:pointer; margin-top:10px;">Отменить</button></div>
+                </div>
+            </div>
+            <button class="submit-btn" id="checkBtn" onclick="handleCheck()">Проверить в реестре</button>
+            <div id="result" class="result hidden"></div>
+        </div>
+    </main>
+    <div class="hotkey-hint">
+        ⏎ Enter - проверить | ⎋ Esc - сбросить
+    </div>
+    <script>
+        let selectedUniCode = null;
+        let selectedUniName = null;
+        let universities = [];
+        let currentMode = 'num';
+        
+        // Тема с картинками
+        function toggleTheme() {
+            document.body.classList.toggle('dark');
+            const themeIcon = document.getElementById('themeIcon');
+            const logoImg = document.getElementById('logoImg');
+            
+            if (document.body.classList.contains('dark')) {
+                themeIcon.src = '/static/png/sun.png';
+                themeIcon.alt = 'Светлая тема';
+                logoImg.src = '/static/png/1.png';
+                document.body.style.backgroundImage = "url('/static/png/darkbg.png')";
+                localStorage.setItem('theme', 'dark');
+            } else {
+                themeIcon.src = '/static/png/moon.png';
+                themeIcon.alt = 'Тёмная тема';
+                logoImg.src = '/static/png/2.png';
+                document.body.style.backgroundImage = "url('/static/png/lightbg.png')";
+                localStorage.setItem('theme', 'light');
+            }
+        }
+        
+        function loadTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            const themeIcon = document.getElementById('themeIcon');
+            const logoImg = document.getElementById('logoImg');
+            
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark');
+                themeIcon.src = '/static/png/sun.png';
+                themeIcon.alt = 'Светлая тема';
+                logoImg.src = '/static/png/1.png';
+                document.body.style.backgroundImage = "url('/static/png/darkbg.png')";
+            } else {
+                document.body.classList.remove('dark');
+                themeIcon.src = '/static/png/moon.png';
+                themeIcon.alt = 'Тёмная тема';
+                logoImg.src = '/static/png/2.png';
+                document.body.style.backgroundImage = "url('/static/png/lightbg.png')";
+            }
+        }
+        
+        // Загрузка списка вузов из базы данных
+        function loadUniversities() {
+            fetch('/api/universities')
+                .then(response => response.json())
+                .then(data => {
+                    universities = data;
+                    const drop = document.getElementById('uniDrop');
+                    if (!data.length) {
+                        drop.innerHTML = '<div style="padding: 12px; text-align: center; color: var(--text-secondary);">Нет вузов в базе</div>';
+                        return;
+                    }
+                    drop.innerHTML = '';
+                    data.forEach(uni => {
+                        const div = document.createElement('div');
+                        div.className = 'uni-item';
+                        div.innerHTML = `<span>${uni.name}</span><span class="uni-item-code">Код: ${uni.code}</span>`;
+                        div.onclick = () => selectUni(uni.code, uni.name);
+                        drop.appendChild(div);
+                    });
+                })
+                .catch(error => {
+                    console.error('Ошибка загрузки вузов:', error);
+                    document.getElementById('uniDrop').innerHTML = '<div style="padding: 12px; text-align: center; color: red;">Ошибка загрузки</div>';
+                });
+        }
+        
+        function selectUni(code, name) {
+            selectedUniCode = code;
+            selectedUniName = name;
+            document.getElementById('uniTrigger').style.display = 'none';
+            document.getElementById('selected-box').style.display = 'flex';
+            document.getElementById('res-name').innerHTML = name;
+            document.getElementById('res-code').innerHTML = `Код: ${code}`;
+            document.getElementById('uniDrop').classList.remove('show');
+        }
+        
+        function resetUni() {
+            selectedUniCode = null;
+            selectedUniName = null;
+            document.getElementById('uniTrigger').style.display = 'flex';
+            document.getElementById('selected-box').style.display = 'none';
+        }
+        
+        function toggleDrop(e) {
+            e.stopPropagation();
+            document.getElementById('uniDrop').classList.toggle('show');
+        }
+        
+        function setMode(m) {
+            currentMode = m;
+            const isNum = m === 'num';
+            document.getElementById('btn-num').classList.toggle('active', isNum);
+            document.getElementById('btn-qr').classList.toggle('active', !isNum);
+            document.getElementById('input-num').classList.toggle('hidden', !isNum);
+            document.getElementById('input-qr').classList.toggle('hidden', isNum);
+            document.getElementById('result').classList.add('hidden');
+        }
+        
+        function triggerFile() {
+            if (document.getElementById('qr-active').classList.contains('hidden')) {
+                document.getElementById('file-in').click();
+            }
+        }
+        
+        function handleFile(e) {
+            const f = e.target.files[0];
+            if (f) {
+                document.getElementById('qr-idle').classList.add('hidden');
+                const a = document.getElementById('qr-active');
+                a.classList.remove('hidden');
+                a.style.display = 'block';
+                document.getElementById('fname').innerText = f.name;
+            }
+        }
+        
+        function removeFile(e) {
+            e.stopPropagation();
+            const fileInput = document.getElementById('file-in');
+            fileInput.value = '';
+            document.getElementById('qr-idle').classList.remove('hidden');
+            const qrActive = document.getElementById('qr-active');
+            qrActive.classList.add('hidden');
+            qrActive.style.display = 'none';
+            document.getElementById('fname').innerText = '';
+        }
+        
+        function resetForm() {
+            resetUni();
+            document.getElementById('dip-num').value = '';
+            const fileInput = document.getElementById('file-in');
+            if (fileInput) {
+                fileInput.value = '';
+                document.getElementById('qr-idle')?.classList.remove('hidden');
+                const qrActive = document.getElementById('qr-active');
+                if (qrActive) {
+                    qrActive.classList.add('hidden');
+                    qrActive.style.display = 'none';
+                }
+                document.getElementById('fname').innerText = '';
+            }
+            const resultDiv = document.getElementById('result');
+            resultDiv.classList.add('hidden');
+            document.getElementById('uniDrop').classList.remove('show');
+        }
+        
+        async function handleCheck() {
+            if (currentMode === 'num') {
+                await checkDiplomaByNumber();
+            } else {
+                await checkDiplomaByQR();
+            }
+        }
+        
+        async function checkDiplomaByNumber() {
+            const diplomaNumber = document.getElementById('dip-num').value.trim();
+            
+            if (!selectedUniCode) {
+                alert('Выберите ВУЗ');
+                return;
+            }
+            if (!diplomaNumber) {
+                alert('Введите номер диплома');
+                return;
+            }
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.classList.remove('hidden', 'valid', 'invalid');
+            resultDiv.innerHTML = '<div class="loading"></div> Проверка...';
+            
+            try {
+                const response = await fetch('/api/search_diploma', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        university_code: selectedUniCode,
+                        diploma_number: diplomaNumber
+                    })
+                });
+                const data = await response.json();
+                
+                if (data.expired) {
+                    resultDiv.className = 'result invalid';
+                    resultDiv.innerHTML = `❌ ${data.message}`;
+                } else if (data.valid) {
+    resultDiv.className = 'result valid';
+    resultDiv.innerHTML = `
+         ${data.message}
+        <div class="result-details">
+            ФИО: ${escapeHtml(data.full_name)}<br>
+            Год выпуска: ${data.graduation_year}<br>
+            Специальность: ${escapeHtml(data.specialty)}
+        </div>
+        <button class="report-btn"
+                onclick="reportSuspiciousAction(${selectedUniCode}, '${String(diplomaNumber).replace(/'/g, "\\'")}')">
+            Сообщить о подозрительных действиях
+        </button>
+    `;
+                } else if (data.found === false) {
+                    resultDiv.className = 'result invalid';
+                    resultDiv.innerHTML = `${data.message}`;
+                } else {
+                    resultDiv.className = 'result invalid';
+                    resultDiv.innerHTML = `${data.message}`;
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+                resultDiv.className = 'result invalid';
+                resultDiv.innerHTML = 'Ошибка при проверке диплома';
+            }
+        }
+        
+        async function checkDiplomaByQR() {
+            const fileInput = document.getElementById('file-in');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Выберите файл с QR-кодом');
+                return;
+            }
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.classList.remove('hidden', 'valid', 'invalid');
+            resultDiv.innerHTML = '<div class="loading"></div> Распознавание QR-кода...';
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const scanResponse = await fetch('/api/scan_qr', {
+                    method: 'POST',
+                    body: formData
+                });
+                const scanData = await scanResponse.json();
+                
+                if (!scanData.success) {
+                    resultDiv.className = 'result invalid';
+                    resultDiv.innerHTML = `${scanData.message}`;
+                    return;
+                }
+                
+                resultDiv.innerHTML = '<div class="loading"></div> Поиск диплома в реестре...';
+                
+                const uni = universities.find(u => u.code === scanData.university_code);
+                if (!uni) {
+                    resultDiv.className = 'result invalid';
+                    resultDiv.innerHTML = `ВУЗ с кодом ${scanData.university_code} не найден в системе`;
+                    return;
+                }
+                
+                selectUni(uni.code, uni.name);
+                
+                const searchResponse = await fetch('/api/search_diploma', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        university_code: scanData.university_code,
+                        diploma_number: scanData.diploma_number
+                    })
+                });
+                const searchData = await searchResponse.json();
+                
+                if (searchData.expired) {
+                    resultDiv.className = 'result invalid';
+                    resultDiv.innerHTML = `❌ ${searchData.message}`;
+                } else if (searchData.valid) {
+    resultDiv.className = 'result valid';
+    resultDiv.innerHTML = `
+        ${searchData.message}
+        <div class="result-details">
+            ФИО: ${escapeHtml(searchData.full_name)}<br>
+            Год выпуска: ${searchData.graduation_year}<br>
+            Специальность: ${escapeHtml(searchData.specialty)}
+        </div>
+        <button class="report-btn"
+                onclick="reportSuspiciousAction(${scanData.university_code}, '${String(scanData.diploma_number).replace(/'/g, "\\'")}')">
+            Сообщить о подозрительных действиях
+        </button>
+    `;
+                } else if (searchData.found === false) {
+                    resultDiv.className = 'result invalid';
+                    resultDiv.innerHTML = `${searchData.message}`;
+                } else {
+                    resultDiv.className = 'result invalid';
+                    resultDiv.innerHTML = `${searchData.message}`;
+                }
+                
+            } catch (error) {
+                console.error('Ошибка:', error);
+                resultDiv.className = 'result invalid';
+                resultDiv.innerHTML = 'Ошибка при обработке QR-кода';
+            
+        }
+         }
+        // Обработка токена из URL (временная ссылка)
+        function handleTokenFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            
+            if (token) {
+                const resultDiv = document.getElementById('result');
+                resultDiv.classList.remove('hidden');
+                resultDiv.innerHTML = '<div class="loading"></div> Проверка диплома по временной ссылке...';
+                
+                fetch('/api/search_diploma', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({temp_token: token})
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.expired) {
+                        resultDiv.className = 'result invalid';
+                        resultDiv.innerHTML = `❌ ${data.message}`;
+                    } else if (data.valid) {
+                        resultDiv.className = 'result valid';
+                        resultDiv.innerHTML = `
+                            ${data.message}
+                            <div class="result-details">
+                                ФИО: ${escapeHtml(data.full_name)}<br>
+                                Год выпуска: ${data.graduation_year}<br>
+                                Специальность: ${escapeHtml(data.specialty)}
+                            </div>
+                        `;
+                    } else {
+                        resultDiv.className = 'result invalid';
+                        resultDiv.innerHTML = `${data.message}`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                    resultDiv.className = 'result invalid';
+                    resultDiv.innerHTML = 'Ошибка при проверке диплома';
+                });
+                
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        }
+        
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+        
+        function handleUrlParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const uniCode = urlParams.get('uni_code');
+            const dipNum = urlParams.get('dip_num');
+            
+            if (uniCode && dipNum) {
+                fetch('/api/universities')
+                    .then(response => response.json())
+                    .then(data => {
+                        const uni = data.find(u => u.code == uniCode);
+                        if (uni) {
+                            selectUni(uni.code, uni.name);
+                            document.getElementById('dip-num').value = dipNum;
+                            setTimeout(() => checkDiplomaByNumber(), 500);
+                        }
+                    });
+            }
+        }
+        
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleCheck();
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                resetForm();
+            }
+        });
+        
+        window.onclick = function() {
+            document.getElementById('uniDrop').classList.remove('show');
+        }
+        
+        loadTheme();
+        loadUniversities();
+        handleUrlParams();
+        handleTokenFromUrl();
+        
+        async function reportSuspiciousAction(universityCode, diplomaNumber) {
+    const comment = prompt('Опишите подозрительные действия:');
+    if (comment === null) return;
+
+    const trimmedComment = comment.trim();
+    if (!trimmedComment) {
+        alert('Введите описание подозрительных действий');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/report_suspicious_activity', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                university_code: universityCode,
+                diploma_number: diplomaNumber,
+                comment: trimmedComment
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            alert('Сообщение о подозрительных действиях отправлено');
+        } else {
+            alert(data.message || 'Ошибка при отправке сообщения');
+        }
+    } catch (error) {
+        console.error('Ошибка:', error);
+        alert('Ошибка при отправке сообщения');
+    }
+}
+    </script>
+</body>
+</html>

@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Реестр ВУЗа — Управление данными</title>
+    <style>
+        :root {
+            --primary: #1b4e8d;
+            --primary-hover: #0a3f8c;
+            --bg: #f4f7f9;
+            --card-bg: #fffeff;
+            --text: #1e293b;
+            --text-secondary: #64748b;
+            --border: #f1f5f9;
+            --danger: #ef4444;
+            --success: #22c55e;
+            --btn-excel-bg: #1b4e8d;
+            --btn-add-bg: #1b4e8d;
+            --table-even: #f8fbff;
+            --modal-bg: white;
+            --modal-text: #1e293b;
+            --logout-hover: #fff1f1;
+        }
+        
+        body.dark {
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --bg: #0f172a;
+            --card-bg: #1e294c;
+            --text: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border: #334155;
+            --danger: #f87171;
+            --success: #4ade80;
+            --btn-excel-bg: #3b82f6;
+            --btn-add-bg: #3b82f6;
+            --table-even: #1e293b;
+            --modal-bg: #1e293b;
+            --modal-text: #f1f5f9;
+            --logout-hover: #450a0a;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease; }
+        body { background: var(--bg); color: var(--text); padding: 40px; }
+        
+        header { 
+            display: flex; justify-content: space-between; align-items: center; 
+            background: var(--card-bg); padding: 15px 40px; border-radius: 15px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 30px; 
+            border: 1px solid var(--border);
+        }
+        .header-left, .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .theme-toggle {
+            background: var(--border);
+            border: none;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s;
+        }
+        .theme-toggle img {
+            width: 20px;
+            height: 20px;
+        }
+        .theme-toggle:hover { transform: scale(1.05); opacity: 0.9; }
+        .user-label { 
+            font-weight: 800; 
+            color: var(--primary); 
+            font-size: 28px; 
+            text-align: center; 
+            padding: 0 20px;
+        }
+        .dropdown {
+            background: var(--card-bg);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+        .logout-item { 
+            padding: 8px 16px; 
+            color: var(--danger); 
+            text-decoration: none; 
+            display: block; 
+            font-weight: 600; 
+            font-size: 14px; 
+            text-align: center;
+            border-radius: 8px;
+        }
+        .logout-item:hover { background: var(--logout-hover); }
+        
+        .add-card { 
+            background: var(--card-bg); padding: 25px; border-radius: 15px; 
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05); margin-bottom: 30px; 
+            border: 1px solid var(--border);
+        }
+        .input-group { display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: 15px; align-items: flex-end; margin-bottom: 20px; }
+        .field { display: flex; flex-direction: column; gap: 5px; }
+        label { font-size: 11px; font-weight: 800; color: var(--text-secondary); text-transform: uppercase; }
+        input { padding: 12px; border: 2px solid var(--border); border-radius: 10px; outline: none; background: var(--card-bg); color: var(--text); }
+        input:focus { border-color: var(--primary); }
+        input::placeholder { color: var(--text-secondary); }
+        .btn-add { background: var(--btn-add-bg); color: white; border: none; padding: 13px 25px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+        .btn-add:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        .btn-excel { background: var(--btn-excel-bg); color: white; border: none; padding: 13px 25px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: 0.2s; margin-right: 15px; }
+        .btn-excel:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        
+        .btn-exceldel { background: var(--btn-excel-bg); color: white; border: none; padding: 13px 25px; border-radius: 10px; font-weight: 700; cursor: pointer; }
+        .btn-exceldel:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        
+        .button-group { display: flex; gap: 15px; align-items: flex-end; }
+        .table-wrap { background: var(--card-bg); border-radius: 15px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.05); border: 1px solid var(--border); }
+        table { width: 100%; border-collapse: collapse; }
+        thead { background: var(--primary); color: white; }
+        th, td { padding: 15px; border-bottom: 1px solid var(--border); text-align: left; font-size: 14px; }
+        tr:nth-child(even) { background: var(--table-even); }
+        .status-active { color: var(--success); font-weight: 800; }
+        .status-revoked { color: var(--danger); font-weight: 800; }
+        .action-btn { 
+            padding: 8px 14px; border-radius: 8px; cursor: pointer; 
+            font-weight: 700; font-size: 11px; text-transform: uppercase; border: 1px solid transparent; transition: 0.2s;
+        }
+        .btn-annul { background: #fee2e2; color: var(--danger); border-color: #fecaca; }
+        .btn-restore { background: #dcfce7; color: var(--success); border-color: #bbf7d0; }
+        .university-code { font-size: 14px; color: var(--text-secondary); margin-left: 10px; }
+        
+        /* Стиль для выделенной строки */
+        .selected-row {
+            background-color: var(--primary) !important;
+            color: white !important;
+        }
+        .selected-row .status-active,
+        .selected-row .status-revoked {
+            color: white !important;
+        }
+        tr {
+            cursor: pointer;
+        }
+        
+        /* Стили для кнопок сортировки */
+        .sort-btn {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 5px;
+            opacity: 0.7;
+            transition: 0.2s;
+        }
+        .sort-btn:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+        .sort-active {
+            opacity: 1;
+        }
+        
+        /* Модальное окно для Excel */
+        .modal {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0;
+            width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);
+            justify-content: center; align-items: center;
+        }
+        .modal.show { display: flex; }
+        .modal-content {
+            background: var(--modal-bg); padding: 30px; border-radius: 20px;
+            max-width: 500px; width: 90%; text-align: center; color: var(--modal-text);
+            border: 1px solid var(--border);
+        }
+        .modal-content h3 { margin-bottom: 20px; color: var(--primary); }
+        .modal-content input[type="file"] { margin: 20px 0; padding: 10px; background: var(--card-bg); color: var(--text); border: 1px solid var(--border); }
+        .modal-buttons { display: flex; gap: 15px; justify-content: center; margin-top: 20px; }
+        .modal-btn { padding: 10px 25px; border-radius: 8px; cursor: pointer; border: none; font-weight: 600; }
+        .modal-btn.confirm { background: var(--primary); color: white; }
+        .modal-btn.cancel { background: var(--border); color: var(--text); }
+        .result-message { margin-top: 15px; padding: 10px; border-radius: 8px; font-size: 14px; }
+        .result-message.success { background: #dcfce7; color: #166534; }
+        .result-message.error { background: #fee2e2; color: #991b1b; }
+        .result-message.info { background: #e0f2fe; color: #075985; }
+        body.dark .result-message.success { background: #064e3b; color: #86efac; }
+        body.dark .result-message.error { background: #7f1d1d; color: #fca5a5; }
+        body.dark .result-message.info { background: #0c4a6e; color: #7dd3fc; }
+        
+        /* Подсказка с хоткеями */
+        .hotkey-hint {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--border);
+            color: var(--text-secondary);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-family: monospace;
+            opacity: 0.7;
+            border: 1px solid var(--border);
+            z-index: 100;
+        }
+        
+        /* Стиль для поля поиска */
+        .search-container {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+        .search-container input {
+            flex: 1;
+            padding: 10px;
+            border-radius: 10px;
+            border: 2px solid var(--border);
+            background: var(--card-bg);
+            color: var(--text);
+            outline: none;
+        }
+        .search-container input:focus {
+            border-color: var(--primary);
+        }
+        .search-container button {
+            background: var(--border);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            color: var(--text);
+            transition: 0.2s;
+        }
+        .search-container button:hover {
+            background: var(--primary-hover);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-left">
+            <h2 style="margin:0; font-size: 22px; color: var(--primary);">
+                Реестр дипломов
+                <span class="university-code">(код ВУЗа: {{ university_code }})</span>
+            </h2>
+        </div>
+        <div class="user-label">{{ university_name }}</div>
+        <div class="header-right">
+            <button class="theme-toggle" onclick="toggleTheme()">
+                <img src="/static/png/moon.png" alt="Тёмная тема" id="themeIcon">
+            </button>
+            <div class="dropdown" id="exitMenu">
+                <a href="/logout" class="logout-item">Выйти из системы</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="add-card">
+        <h3 style="margin: 0 0 20px 0; font-size: 16px; color: var(--primary);">Добавить новую запись в реестр</h3>
+        <div class="input-group">
+            <div class="field">
+                <label>ФИО выпускника</label>
+                <input type="text" id="fio" placeholder="Например: Петров И.И.">
+            </div>
+            <div class="field">
+                <label>Год выпуска</label>
+                <input type="text" id="year" placeholder="2026">
+            </div>
+            <div class="field">
+                <label>Специальность</label>
+                <input type="text" id="spec" placeholder="Юриспруденция">
+            </div>
+            <div class="field">
+                <label>Номер диплома</label>
+                <input type="text" id="num" placeholder="ДП-2026-000">
+            </div>
+            <div class="button-group">
+                <button class="btn-excel" onclick="openExcelModal()">Загрузить из Excel/CSV</button>
+                <button class="btn-add" onclick="addDiploma()">Добавить</button>
+            </div>
+        </div>
+        <div style="display: flex; gap: 15px; margin-top: 20px; justify-content: flex-end;">
+            <button class="btn-exceldel" onclick="clearAllDiplomas()">Очистить список</button>
+            <button class="btn-exceldel" onclick="deleteSelected()" id="deleteBtn" disabled>Удалить выбранное</button>
+            <button class="btn-exceldel" onclick="exportToExcel()">Экспорт в Excel</button>
+        </div>
+    </div>
+
+    <!-- Поле поиска -->
+    <div class="search-container">
+        <input type="text" id="searchInput" placeholder="Поиск по ФИО, номеру диплома, году или специальности...">
+        <button id="clearSearchBtn">Сбросить</button>
+    </div>
+
+    <div class="table-wrap">
+        <table id="diplomaTable">
+            <thead>
+                <tr>
+                    <th style="width: 50px; text-align: center;">
+                        №
+                        <button class="sort-btn" data-column="id" onclick="sortTable('id')">↕</button>
+                    </th>
+                    <th>
+                        ФИО
+                        <button class="sort-btn" data-column="full_name" onclick="sortTable('full_name')">↕</button>
+                    </th>
+                    <th>
+                        Год
+                        <button class="sort-btn" data-column="graduation_year" onclick="sortTable('graduation_year')">↕</button>
+                    </th>
+                    <th>
+                        Специальность
+                        <button class="sort-btn" data-column="specialty" onclick="sortTable('specialty')">↕</button>
+                    </th>
+                    <th>
+                        Номер диплома
+                        <button class="sort-btn" data-column="diploma_number" onclick="sortTable('diploma_number')">↕</button>
+                    </th>
+                    <th style="width: 200px;">
+                        Статус в базе
+                        <button class="sort-btn" data-column="status" onclick="sortTable('status')">↕</button>
+                    </th>
+                    <th style="width: 160px;">Управление</th>
+                </tr>
+            </thead>
+            <tbody id="diplomaTableBody">
+                <tr><td colspan="7" style="text-align: center;">Загрузка...<\/td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Модальное окно для загрузки Excel -->
+    <div id="excelModal" class="modal">
+        <div class="modal-content">
+            <h3>Загрузка дипломов из Excel/CSV</h3>
+            <p>Файл должен содержать колонки:<br>
+            <strong>ФИО | Год | Специальность | Номер диплома</strong></p>
+            <input type="file" id="excelFile" accept=".xlsx, .xls, .csv">
+            <div id="uploadResult"></div>
+            <div class="modal-buttons">
+                <button class="modal-btn confirm" onclick="uploadExcel()">Загрузить</button>
+                <button class="modal-btn cancel" onclick="closeExcelModal()">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Подсказка с хоткеями -->
+    <div class="hotkey-hint">Esc - выход из системы</div>
+
+    <script>
+        // --- Переменные сортировки и поиска ---
+        let sortColumn = 'id';
+        let sortDirection = 'desc';   // 'asc' или 'desc' (по умолчанию новые сверху)
+        let searchQuery = '';
+
+        // --- Хоткеи для формы добавления диплома ---
+        const fioInput = document.getElementById('fio');
+        const yearInput = document.getElementById('year');
+        const specInput = document.getElementById('spec');
+        const numInput = document.getElementById('num');
+
+        if (fioInput) {
+            fioInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    yearInput.focus();
+                }
+            });
+        }
+        if (yearInput) {
+            yearInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    specInput.focus();
+                }
+            });
+        }
+        if (specInput) {
+            specInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    numInput.focus();
+                }
+            });
+        }
+        if (numInput) {
+            numInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addDiploma();
+                }
+            });
+        }
+
+        // --- Тёмная тема ---
+        function toggleTheme() {
+            document.body.classList.toggle('dark');
+            const themeIcon = document.getElementById('themeIcon');
+            if (document.body.classList.contains('dark')) {
+                themeIcon.src = '/static/png/sun.png';
+                themeIcon.alt = 'Светлая тема';
+                localStorage.setItem('theme', 'dark');
+            } else {
+                themeIcon.src = '/static/png/moon.png';
+                themeIcon.alt = 'Тёмная тема';
+                localStorage.setItem('theme', 'light');
+            }
+        }
+        
+        function loadTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            const themeIcon = document.getElementById('themeIcon');
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark');
+                themeIcon.src = '/static/png/sun.png';
+                themeIcon.alt = 'Светлая тема';
+            } else {
+                document.body.classList.remove('dark');
+                themeIcon.src = '/static/png/moon.png';
+                themeIcon.alt = 'Тёмная тема';
+            }
+        }
+        
+        // --- Основной код ---
+        let diplomas = [];
+        let selectedDiplomaId = null;
+        
+        function loadDiplomas() {
+            fetch('/api/university/diplomas')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        document.getElementById('diplomaTableBody').innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Ошибка загрузки<\/td></tr>';
+                        return;
+                    }
+                    diplomas = data;
+                    renderTable();
+                    updateSortButtons();
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                    document.getElementById('diplomaTableBody').innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Ошибка загрузки<\/td></tr>';
+                });
+        }
+        
+        // Фильтрация дипломов по поисковому запросу (включая специальность)
+        function filterDiplomas() {
+            if (!searchQuery.trim()) return diplomas;
+            const query = searchQuery.trim().toLowerCase();
+            return diplomas.filter(d => {
+                return d.full_name.toLowerCase().includes(query) ||
+                       d.diploma_number.toLowerCase().includes(query) ||
+                       d.graduation_year.toString().includes(query) ||
+                       (d.specialty && d.specialty.toLowerCase().includes(query));
+            });
+        }
+        
+        // Получение отсортированных и отфильтрованных дипломов
+        function getSortedFilteredDiplomas() {
+            const filtered = filterDiplomas();
+            return [...filtered].sort((a, b) => {
+                let valA, valB;
+                switch(sortColumn) {
+                    case 'id':
+                        valA = a.id;
+                        valB = b.id;
+                        break;
+                    case 'full_name':
+                        valA = a.full_name.toLowerCase();
+                        valB = b.full_name.toLowerCase();
+                        break;
+                    case 'graduation_year':
+                        valA = a.graduation_year;
+                        valB = b.graduation_year;
+                        break;
+                    case 'specialty':
+                        valA = (a.specialty || '').toLowerCase();
+                        valB = (b.specialty || '').toLowerCase();
+                        break;
+                    case 'diploma_number':
+                        valA = a.diploma_number;
+                        valB = b.diploma_number;
+                        break;
+                    case 'status':
+                        valA = a.status;
+                        valB = b.status;
+                        break;
+                    default:
+                        valA = a.id;
+                        valB = b.id;
+                }
+                if (sortDirection === 'asc') {
+                    return valA > valB ? 1 : -1;
+                } else {
+                    return valA < valB ? 1 : -1;
+                }
+            });
+        }
+        
+        function renderTable() {
+            const tbody = document.getElementById('diplomaTableBody');
+            const sortedFiltered = getSortedFilteredDiplomas();
+            
+            if (!sortedFiltered.length) {
+                tbody.innerHTML = '<td><td colspan="6" style="text-align: center;">Нет дипломов, соответствующих поиску<\/td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = '';
+            sortedFiltered.forEach((diploma, index) => {
+                const isActive = diploma.status === 1;
+                const row = tbody.insertRow();
+                row.setAttribute('data-id', diploma.id);
+                row.setAttribute('onclick', `selectRow(${diploma.id}, this)`);
+                row.style.cursor = 'pointer';
+                
+                row.innerHTML = `
+                    <td style="text-align: center;">${index + 1}<\/td>
+                    <td>${escapeHtml(diploma.full_name)}<\/td>
+                    <td>${diploma.graduation_year}<\/td>
+                    <td>${escapeHtml(diploma.specialty || '')}<\/td>
+                    <td>${escapeHtml(diploma.diploma_number)}<\/td>
+                    <td class="${isActive ? 'status-active' : 'status-revoked'}">${isActive ? 'Активен' : 'Аннулирован'}<\/td>
+                    <td>
+                        <button class="action-btn ${isActive ? 'btn-annul' : 'btn-restore'}" 
+                                onclick="event.stopPropagation(); toggleStatus(${diploma.id}, ${diploma.status})">
+                            ${isActive ? 'Аннулировать' : 'Возобновить'}
+                        </button>
+                    <\/td>
+                `;
+            });
+        }
+        
+        function sortTable(column) {
+            if (sortColumn === column) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = column;
+                sortDirection = 'desc';
+            }
+            renderTable();
+            updateSortButtons();
+        }
+        
+        function updateSortButtons() {
+            document.querySelectorAll('.sort-btn').forEach(btn => {
+                const column = btn.getAttribute('data-column');
+                if (column === sortColumn) {
+                    btn.classList.add('sort-active');
+                    btn.innerHTML = sortDirection === 'asc' ? '▲' : '▼';
+                } else {
+                    btn.classList.remove('sort-active');
+                    btn.innerHTML = '↕';
+                }
+            });
+        }
+        
+        function selectRow(diplomaId, element) {
+            if (selectedDiplomaId) {
+                const prevRow = document.querySelector(`tr[data-id="${selectedDiplomaId}"]`);
+                if (prevRow) prevRow.classList.remove('selected-row');
+            }
+            selectedDiplomaId = diplomaId;
+            element.classList.add('selected-row');
+            document.getElementById('deleteBtn').disabled = false;
+        }
+        
+        function clearAllDiplomas() {
+            if (!confirm('ВНИМАНИЕ! Вы уверены, что хотите удалить ВСЕ дипломы этого ВУЗа? Отменить действие будет невозможно.')) {
+                return;
+            }
+            fetch('/api/university/clear_all_diplomas', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'}
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`Удалено ${data.deleted_count} дипломов`);
+                    loadDiplomas();
+                    selectedDiplomaId = null;
+                    document.getElementById('deleteBtn').disabled = true;
+                } else {
+                    alert('Ошибка: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('Ошибка при очистке списка');
+            });
+        }
+        
+        function deleteSelected() {
+            if (!selectedDiplomaId) {
+                alert('Сначала выберите диплом для удаления');
+                return;
+            }
+            if (!confirm('Вы уверены, что хотите удалить выбранный диплом?')) {
+                return;
+            }
+            fetch('/api/university/delete_diploma', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({diploma_id: selectedDiplomaId})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Диплом удалён');
+                    loadDiplomas();
+                    selectedDiplomaId = null;
+                    document.getElementById('deleteBtn').disabled = true;
+                } else {
+                    alert('Ошибка: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('Ошибка при удалении диплома');
+            });
+        }
+        
+        function addDiploma() {
+            const fio = document.getElementById('fio').value.trim();
+            const year = document.getElementById('year').value.trim();
+            const spec = document.getElementById('spec').value.trim();
+            const num = document.getElementById('num').value.trim();
+            
+            if (!fio || !year || !spec || !num) {
+                alert("Пожалуйста, заполните все данные");
+                return;
+            }
+            
+            fetch('/api/university/add_diploma', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    full_name: fio,
+                    graduation_year: year,
+                    specialty: spec,
+                    diploma_number: num
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('fio').value = '';
+                    document.getElementById('year').value = '';
+                    document.getElementById('spec').value = '';
+                    document.getElementById('num').value = '';
+                    loadDiplomas();
+                    alert("Диплом успешно добавлен");
+                } else {
+                    alert(data.message || "Ошибка при добавлении");
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert("Ошибка при добавлении диплома");
+            });
+        }
+        
+        function openExcelModal() {
+            document.getElementById('excelModal').classList.add('show');
+            document.getElementById('excelFile').value = '';
+            document.getElementById('uploadResult').innerHTML = '';
+        }
+        
+        function closeExcelModal() {
+            document.getElementById('excelModal').classList.remove('show');
+        }
+        
+        function uploadExcel() {
+            const fileInput = document.getElementById('excelFile');
+            const file = fileInput.files[0];
+            if (!file) {
+                alert("Выберите файл");
+                return;
+            }
+            const formData = new FormData();
+            formData.append('file', file);
+            const resultDiv = document.getElementById('uploadResult');
+            resultDiv.innerHTML = '<div class="result-message info">Загрузка...</div>';
+            
+            fetch('/api/university/upload_excel', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    resultDiv.innerHTML = `<div class="result-message success">
+                        Загружено: ${data.added_count} дипломов<br>
+                        Ошибок: ${data.error_count}
+                        ${data.errors.length ? '<br><small>' + data.errors.join('<br>') + '</small>' : ''}
+                    </div>`;
+                    loadDiplomas();
+                    setTimeout(() => closeExcelModal(), 3000);
+                } else {
+                    resultDiv.innerHTML = `<div class="result-message error">${data.message}</div>`;
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                resultDiv.innerHTML = '<div class="result-message error">Ошибка при загрузке файла</div>';
+            });
+        }
+        
+        function toggleStatus(diplomaId, currentStatus) {
+            fetch('/api/university/toggle_status', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    diploma_id: diplomaId,
+                    current_status: currentStatus
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    loadDiplomas();
+                } else {
+                    alert(data.message || "Ошибка при изменении статуса");
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert("Ошибка при изменении статуса");
+            });
+        }
+        
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+        
+        // --- Обработка поиска ---
+        const searchInput = document.getElementById('searchInput');
+        const clearSearchBtn = document.getElementById('clearSearchBtn');
+        
+        if (searchInput) {
+            searchInput.addEventListener('input', function(e) {
+                searchQuery = e.target.value;
+                renderTable();
+            });
+        }
+        if (clearSearchBtn) {
+            clearSearchBtn.addEventListener('click', function() {
+                searchQuery = '';
+                searchInput.value = '';
+                renderTable();
+            });
+        }
+        
+        // --- Экспорт в Excel ---
+        function exportToExcel() {
+            window.location.href = '/api/university/export_excel';
+        }
+        
+        // Хоткей Esc для выхода из системы
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                window.location.href = '/logout';
+            }
+        });
+        
+        // Инициализация
+        loadTheme();
+        loadDiplomas();
+    </script>
+</body>
+</html>

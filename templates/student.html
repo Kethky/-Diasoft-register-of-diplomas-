@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Мой профиль - ДипломРеестр</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #1e293b;
+            --text-secondary: #64748b;
+            --border: #f1f5f9;
+            --status-active-bg: #dcfce7;
+            --status-active-text: #15803d;
+            --status-revoked-bg: #fee2e2;
+            --status-revoked-text: #991b1b;
+            --btn-bg: #2563eb;
+            --btn-share-bg: #f1f5f9;
+            --btn-share-text: #333;
+            --btn-download-bg: #2563eb;
+            --toast-bg: #1e293b;
+            --toast-text: #ffffff;
+            --hotkey-bg: #1e293b;
+            --hotkey-text: #94a3b8;
+		--bg-image: url('/static/png/lightbg.png');
+        }
+        
+        body.dark {
+            --primary: #3b82f6;
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --text: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border: #334155;
+            --status-active-bg: #064e3b;
+            --status-active-text: #86efac;
+            --status-revoked-bg: #7f1d1d;
+            --status-revoked-text: #fca5a5;
+            --btn-bg: #3b82f6;
+            --btn-share-bg: #334155;
+            --btn-share-text: #e2e8f0;
+            --btn-download-bg: #3b82f6;
+            --toast-bg: #334155;
+            --toast-text: #f1f5f9;
+            --hotkey-bg: #334155;
+            --hotkey-text: #94a3b8;
+		--bg-image: url('/static/png/darkbg.png');
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease; }
+        body { background: var(--bg); background-image: var(--bg-image);color: var(--text); padding: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
+        
+        .card { background: var(--card-bg); padding: 35px; border-radius: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); width: 480px; border: 1px solid var(--border); position: relative; }
+        
+        .theme-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: var(--btn-share-bg);
+            border: none;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s;
+            z-index: 10;
+        }
+        .theme-toggle img {
+            width: 20px;
+            height: 20px;
+        }
+        .theme-toggle:hover { transform: scale(1.05); opacity: 0.9; }
+        
+        .status { padding: 6px 15px; border-radius: 20px; font-size: 12px; font-weight: 800; display: inline-block; margin-bottom: 20px; }
+        .status-active { background: var(--status-active-bg); color: var(--status-active-text); }
+        .status-revoked { background: var(--status-revoked-bg); color: var(--status-revoked-text); }
+        
+        .btn { width: 100%; padding: 14px; border-radius: 12px; border: none; background: var(--btn-bg); color: white; font-weight: bold; cursor: pointer; margin-top: 15px; transition: 0.2s; font-size: 15px; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-share { background: var(--btn-share-bg); color: var(--btn-share-text); }
+        .btn-share:hover { background: var(--border); }
+        .btn-download { background: var(--btn-download-bg); color: white; }
+        .btn-download:hover { background: var(--btn-download-bg); opacity: 0.9; }
+        
+        .qr-container { margin-top: 20px; text-align: center; padding: 20px; background: var(--bg); border-radius: 15px; }
+        .qr-container img { max-width: 180px; margin-top: 10px; }
+        
+        .info-row { margin: 15px 0; padding: 10px 0; border-bottom: 1px solid var(--border); }
+        .info-label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; }
+        .info-value { font-size: 16px; color: var(--text); margin-top: 5px; font-weight: 500; }
+        
+        .logout-link { margin-top: 25px; text-align: center; }
+        .logout-link a { color: #ef4444; text-decoration: none; font-size: 14px; }
+        .logout-link a:hover { text-decoration: underline; }
+        
+        .share-link { margin-top: 10px; font-size: 11px; color: var(--text-secondary); word-break: break-all; background: var(--bg); padding: 8px; border-radius: 8px; }
+        .button-group { display: flex; gap: 10px; margin-top: 15px; }
+        .button-group .btn { margin-top: 0; flex: 1; }
+        
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--toast-bg);
+            color: var(--toast-text);
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 13px;
+            font-weight: 500;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .toast.show { opacity: 1; }
+        
+        .hotkey-hint {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--hotkey-bg);
+            color: var(--hotkey-text);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-family: monospace;
+            opacity: 0.7;
+            border: 1px solid var(--border);
+        }
+        
+        .full-name {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--primary);
+            text-align: center;
+            margin-bottom: 15px;
+            padding-right: 40px;
+        }
+        
+        input[type="number"] {
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            background: var(--card-bg);
+            color: var(--text);
+            padding: 10px;
+            text-align: center;
+            width: 100%;
+            -moz-appearance: textfield;
+            appearance: textfield;
+        }
+        
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        
+        .section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--primary);
+            margin: 15px 0 10px 0;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <button class="theme-toggle" onclick="toggleTheme()">
+            <img src="/static/png/moon.png" alt="Тёмная тема" id="themeIcon">
+        </button>
+        
+        <div class="full-name" id="full-name">{{ full_name }}</div>
+        
+        <div>
+            <div class="status status-active" id="status-badge">
+                СТАТУС: ЗАГРУЗКА...
+            </div>
+        </div>
+        
+        <div class="info-row">
+            <div class="info-label">Номер диплома</div>
+            <div class="info-value">{{ diploma_number }}</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Год выпуска</div>
+            <div class="info-value">{{ graduation_year }}</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Специальность</div>
+            <div class="info-value">{{ specialty }}</div>
+        </div>
+        <div class="info-row">
+            <div class="info-label">Код ВУЗа</div>
+            <div class="info-value">{{ university_code }}</div>
+        </div>
+        
+        <!-- Поля для выбора длительности QR -->
+        <div class="section-title">Настройка QR-кода</div>
+        <div style="display: flex; gap: 15px; margin: 10px 0 10px 0;">
+            <div style="flex: 1;">
+                <div class="info-label">Дни</div>
+                <input type="number" id="qr-expiry-days" value="0" min="0" max="30" step="1">
+            </div>
+            <div style="flex: 1;">
+                <div class="info-label">Часы</div>
+                <input type="number" id="qr-expiry-hours" value="1" min="0" max="23" step="1">
+            </div>
+        </div>
+        <small style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 15px;">Срок действия QR-ссылки (макс: 30 дней, мин: 1 минута)</small>
+        
+        <button class="btn" onclick="generateQR()">Генерация QR-кода</button>
+        <button class="btn" onclick="revokeQR()" style="background: #ef4444;">Отозвать QR-код</button>
+        
+        <div id="qr-container" class="qr-container" style="display:none;">
+            <div>QR-код для проверки диплома:</div>
+            <img id="qr-image" src="" alt="QR-код">
+            <div class="button-group">
+                <button class="btn btn-download" onclick="downloadQR()">Скачать PNG</button>
+            </div>
+            <div id="share-link" class="share-link"></div>
+        </div>
+
+        <!-- Поля для выбора длительности временной ссылки -->
+        <div class="section-title">Настройка временной ссылки</div>
+        <div style="display: flex; gap: 15px; margin: 10px 0 10px 0;">
+            <div style="flex: 1;">
+                <div class="info-label">Дни</div>
+                <input type="number" id="expiry-days" value="0" min="0" max="30" step="1">
+            </div>
+            <div style="flex: 1;">
+                <div class="info-label">Часы</div>
+                <input type="number" id="expiry-hours" value="1" min="0" max="23" step="1">
+            </div>
+        </div>
+        <small style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 5px;">Максимум: 30 дней. Минимум: 1 минута</small>
+
+        <button class="btn" onclick="generateTempLink()" ">Создать временную ссылку</button>
+
+        <div class="logout-link">
+            <a href="/logout" id="logout-link">Выйти из системы</a>
+        </div>
+    </div>
+    
+    <div id="toast" class="toast">Ссылка скопирована</div>
+    <div class="hotkey-hint">⎋ Esc - выход из системы</div>
+    
+    <script>
+        // --- Тёмная тема с картинками ---
+       function toggleTheme() {
+            document.body.classList.toggle('dark');
+            const themeIcon = document.getElementById('themeIcon');
+            if (document.body.classList.contains('dark')) {
+                themeIcon.src = '/static/png/sun.png';
+                themeIcon.alt = 'Светлая тема';
+                localStorage.setItem('theme', 'dark');
+            } else {
+                themeIcon.src = '/static/png/moon.png';
+                themeIcon.alt = 'Тёмная тема';
+                localStorage.setItem('theme', 'light');
+            }
+        }
+        
+        function loadTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            const themeIcon = document.getElementById('themeIcon');
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark');
+                themeIcon.src = '/static/png/sun.png';
+                themeIcon.alt = 'Светлая тема';
+            } else {
+                document.body.classList.remove('dark');
+                themeIcon.src = '/static/png/moon.png';
+                themeIcon.alt = 'Тёмная тема';
+            }
+        }
+        
+        const fullName = "{{ full_name }}";
+        const diplomaNumber = "{{ diploma_number }}";
+        const universityCode = "{{ university_code }}";
+        let currentQRUrl = "";
+        
+        function revokeQR() {
+            if (!confirm('Вы уверены, что хотите отозвать текущий QR-код? Новый QR-код нужно будет создать заново.')) {
+                return;
+            }
+            
+            fetch('/api/revoke_qr', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    university_code: universityCode,
+                    diploma_number: diplomaNumber
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('QR-код отозван');
+                    document.getElementById('qr-container').style.display = 'none';
+                    currentQRUrl = "";
+                } else {
+                    showToast(data.message || 'Ошибка при отзыве QR-кода', true);
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                showToast('Ошибка при отзыве QR-кода', true);
+            });
+        }
+        
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = isError ? '' + message : '' + message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2000);
+        }
+        
+        function refreshStatus() {
+            fetch('/api/student/status')
+                .then(response => response.json())
+                .then(data => {
+                    const statusBadge = document.getElementById('status-badge');
+                    if (data.status === 1) {
+                        statusBadge.className = 'status status-active';
+                        statusBadge.innerHTML = 'СТАТУС: АКТИВЕН';
+                    } else if (data.status === 0) {
+                        statusBadge.className = 'status status-revoked';
+                        statusBadge.innerHTML = 'СТАТУС: АННУЛИРОВАН';
+                    } else {
+                        statusBadge.innerHTML = 'СТАТУС: НЕИЗВЕСТЕН';
+                    }
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                });
+        }
+        
+        refreshStatus();
+        
+        function generateQR() {
+            let days = parseInt(document.getElementById('qr-expiry-days').value) || 0;
+            let hours = parseInt(document.getElementById('qr-expiry-hours').value) || 0;
+            
+            if (days < 0) days = 0;
+            if (hours < 0) hours = 0;
+            
+            if (days > 30) {
+                days = 30;
+                document.getElementById('qr-expiry-days').value = 30;
+                showToast('Максимум 30 дней', true);
+            }
+            if (hours > 23) {
+                hours = 23;
+                document.getElementById('qr-expiry-hours').value = 23;
+                showToast('Часы не могут быть больше 23', true);
+            }
+            
+            let totalHours = (days * 24) + hours;
+            
+            if (totalHours < 0.0167) {
+                totalHours = 0.0167;
+                showToast('Минимальная длительность 1 минута', true);
+            }
+            
+            const expirySeconds = Math.floor(totalHours * 60 * 60);
+            
+            fetch('/api/generate_temp_link', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    university_code: universityCode,
+                    diploma_number: diplomaNumber,
+                    expiry_seconds: expirySeconds
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const tempUrl = data.link;
+                    currentQRUrl = tempUrl;
+                    
+                    fetch('/api/generate_qr', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({url: tempUrl})
+                    })
+                    .then(response => response.json())
+                    .then(qrData => {
+                        if (qrData.success) {
+                            document.getElementById('qr-image').src = qrData.qr_image;
+                            
+                            let message = '';
+                            if (days > 0 && hours > 0) {
+                                message = `${days} дн. ${hours} ч.`;
+                            } else if (days > 0) {
+                                message = `${days} дн.`;
+                            } else if (hours > 0) {
+                                message = `${hours} ч.`;
+                            } else {
+                                message = `1 мин.`;
+                            }
+                            document.getElementById('share-link').innerHTML = `QR-код действителен: ${message}`;
+                            document.getElementById('qr-container').style.display = 'block';
+                            showToast(`QR-код создан! Действует ${message}`);
+                        } else {
+                            showToast(qrData.message || 'Ошибка при создании QR-кода', true);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Fetch error:', error);
+                        showToast('Ошибка при создании QR-кода', true);
+                    });
+                } else {
+                    showToast(data.message || 'Ошибка при создании ссылки', true);
+                }
+            })
+            .catch(error => {
+                console.error('Fetch error:', error);
+                showToast('Ошибка при создании ссылки', true);
+            });
+        }
+        
+        function downloadQR() {
+            const img = document.getElementById('qr-image');
+            if (!img.src) {
+                showToast('Сначала сгенерируйте QR-код', true);
+                return;
+            }
+            
+            fetch(img.src)
+                .then(response => response.blob())
+                .then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `QR_${diplomaNumber.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    showToast('QR-код скачан');
+                })
+                .catch(error => {
+                    console.error('Ошибка при скачивании:', error);
+                    showToast('Не удалось скачать QR-код', true);
+                });
+        }
+        
+        function generateTempLink() {
+            let days = parseInt(document.getElementById('expiry-days').value) || 0;
+            let hours = parseInt(document.getElementById('expiry-hours').value) || 0;
+            
+            if (days < 0) days = 0;
+            if (hours < 0) hours = 0;
+            
+            if (days > 30) {
+                days = 30;
+                document.getElementById('expiry-days').value = 30;
+                showToast('Максимум 30 дней', true);
+            }
+            if (hours > 23) {
+                hours = 23;
+                document.getElementById('expiry-hours').value = 23;
+                showToast('Часы не могут быть больше 23', true);
+            }
+            
+            let totalHours = (days * 24) + hours;
+            
+            if (totalHours < 0.0167) {
+                totalHours = 0.0167;
+                showToast('Минимальная длительность 1 минута', true);
+            }
+            
+            const expirySeconds = Math.floor(totalHours * 60 * 60);
+            
+            fetch('/api/generate_temp_link', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    university_code: universityCode,
+                    diploma_number: diplomaNumber,
+                    expiry_seconds: expirySeconds
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    navigator.clipboard.writeText(data.link);
+                    let message = '';
+                    if (days > 0 && hours > 0) {
+                        message = `Ссылка скопирована! Действует ${days} дн. ${hours} ч.`;
+                    } else if (days > 0) {
+                        message = `Ссылка скопирована! Действует ${days} дн.`;
+                    } else if (hours > 0) {
+                        message = `Ссылка скопирована! Действует ${hours} ч.`;
+                    } else {
+                        message = `Ссылка скопирована! Действует 1 мин.`;
+                    }
+                    showToast(message);
+                } else {
+                    showToast(data.message || 'Ошибка при создании ссылки', true);
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                showToast('Ошибка при создании ссылки', true);
+            });
+        }
+        
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                window.location.href = '/logout';
+            }
+        });
+        
+        loadTheme();
+        
+        // Хоткеи для полей длительности временной ссылки
+        const expiryDays = document.getElementById('expiry-days');
+        const expiryHours = document.getElementById('expiry-hours');
+        
+        if (expiryDays) {
+            expiryDays.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    expiryHours.focus();
+                }
+            });
+            expiryDays.addEventListener('input', function() {
+                if (expiryDays.value === '' || expiryDays.value === null) {
+                    expiryDays.value = 0;
+                }
+            });
+        }
+        
+        if (expiryHours) {
+            expiryHours.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    generateTempLink();
+                }
+            });
+            expiryHours.addEventListener('input', function() {
+                if (expiryHours.value === '' || expiryHours.value === null) {
+                    expiryHours.value = 0;
+                }
+            });
+        }
+        
+        // Хоткеи для полей длительности QR
+        const qrExpiryDays = document.getElementById('qr-expiry-days');
+        const qrExpiryHours = document.getElementById('qr-expiry-hours');
+        
+        if (qrExpiryDays) {
+            qrExpiryDays.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    qrExpiryHours.focus();
+                }
+            });
+            qrExpiryDays.addEventListener('input', function() {
+                if (qrExpiryDays.value === '' || qrExpiryDays.value === null) {
+                    qrExpiryDays.value = 0;
+                }
+            });
+        }
+        
+        if (qrExpiryHours) {
+            qrExpiryHours.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    generateQR();
+                }
+            });
+            qrExpiryHours.addEventListener('input', function() {
+                if (qrExpiryHours.value === '' || qrExpiryHours.value === null) {
+                    qrExpiryHours.value = 0;
+                }
+            });
+        }
+    </script>
+</body>
+</html>
