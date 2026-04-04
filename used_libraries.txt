@@ -1,0 +1,34 @@
+Использованные библиотеки в проекте
+
+Стандартные библиотеки Python:
+- json
+- os
+- sys
+- sqlite3
+- time
+- base64
+- tempfile
+- io
+- hashlib
+- secrets
+- string
+- re
+- datetime
+- functools (wraps, lru_cache)
+
+Сторонние библиотеки:
+- python-dotenv
+- bcrypt
+- qrcode
+- opencv-python
+- pandas
+- openpyxl
+- flask
+- itsdangerous
+- flask-limiter
+- cryptography
+
+По файлам:
+- main.py: Flask, dotenv, bcrypt, qrcode, cv2, pandas, openpyxl, flask-limiter, itsdangerous, cryptography и стандартные модули.
+- university_admin.py: bcrypt и стандартные модули.
+- generate_keys.py: cryptography и стандартные модули.
