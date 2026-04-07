@@ -292,11 +292,11 @@
             
             fetch('/api/revoke_qr', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    university_code: universityCode,
-                    diploma_number: diplomaNumber
-                })
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({})
             })
             .then(response => response.json())
             .then(data => {
@@ -374,10 +374,11 @@
             
             fetch('/api/generate_temp_link', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': '{{ csrf_token }}'
+                },
                 body: JSON.stringify({
-                    university_code: universityCode,
-                    diploma_number: diplomaNumber,
                     expiry_seconds: expirySeconds
                 })
             })
@@ -389,7 +390,10 @@
                     
                     fetch('/api/generate_qr', {
                         method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': '{{ csrf_token }}'
+                        },
                         body: JSON.stringify({url: tempUrl})
                     })
                     .then(response => response.json())
@@ -483,10 +487,11 @@
             
             fetch('/api/generate_temp_link', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': '{{ csrf_token }}'
+                },
                 body: JSON.stringify({
-                    university_code: universityCode,
-                    diploma_number: diplomaNumber,
                     expiry_seconds: expirySeconds
                 })
             })

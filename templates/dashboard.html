@@ -395,7 +395,10 @@ body.dark .report-btn {
             try {
                 const response = await fetch('/api/search_diploma', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': '{{ csrf_token }}'
+                    },
                     body: JSON.stringify({
                         university_code: selectedUniCode,
                         diploma_number: diplomaNumber
@@ -409,16 +412,14 @@ body.dark .report-btn {
                 } else if (data.valid) {
     resultDiv.className = 'result valid';
     resultDiv.innerHTML = `
-         ${data.message}
-        <div class="result-details">
-            ФИО: ${escapeHtml(data.full_name)}<br>
-            Год выпуска: ${data.graduation_year}<br>
-            Специальность: ${escapeHtml(data.specialty)}
-        </div>
-        <button class="report-btn"
-                onclick="reportSuspiciousAction(${selectedUniCode}, '${String(diplomaNumber).replace(/'/g, "\\'")}')">
-            Сообщить о подозрительных действиях
-        </button>
+    ${data.message}
+    <div class="result-details">
+        Статус: диплом найден в реестре
+    </div>
+    <button class="report-btn"
+            onclick="reportSuspiciousAction(${selectedUniCode}, '${String(diplomaNumber).replace(/'/g, "\\'")}')">
+        Сообщить о подозрительных действиях
+    </button>
     `;
                 } else if (data.found === false) {
                     resultDiv.className = 'result invalid';
@@ -435,135 +436,148 @@ body.dark .report-btn {
         }
         
         async function checkDiplomaByQR() {
-            const fileInput = document.getElementById('file-in');
-            const file = fileInput.files[0];
-            
-            if (!file) {
-                alert('Выберите файл с QR-кодом');
-                return;
-            }
-            
-            const resultDiv = document.getElementById('result');
-            resultDiv.classList.remove('hidden', 'valid', 'invalid');
-            resultDiv.innerHTML = '<div class="loading"></div> Распознавание QR-кода...';
-            
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            try {
-                const scanResponse = await fetch('/api/scan_qr', {
-                    method: 'POST',
-                    body: formData
-                });
-                const scanData = await scanResponse.json();
-                
-                if (!scanData.success) {
-                    resultDiv.className = 'result invalid';
-                    resultDiv.innerHTML = `${scanData.message}`;
-                    return;
-                }
-                
-                resultDiv.innerHTML = '<div class="loading"></div> Поиск диплома в реестре...';
-                
-                const uni = universities.find(u => u.code === scanData.university_code);
-                if (!uni) {
-                    resultDiv.className = 'result invalid';
-                    resultDiv.innerHTML = `ВУЗ с кодом ${scanData.university_code} не найден в системе`;
-                    return;
-                }
-                
-                selectUni(uni.code, uni.name);
-                
-                const searchResponse = await fetch('/api/search_diploma', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        university_code: scanData.university_code,
-                        diploma_number: scanData.diploma_number
-                    })
-                });
-                const searchData = await searchResponse.json();
-                
-                if (searchData.expired) {
-                    resultDiv.className = 'result invalid';
-                    resultDiv.innerHTML = `❌ ${searchData.message}`;
-                } else if (searchData.valid) {
-    resultDiv.className = 'result valid';
-    resultDiv.innerHTML = `
-        ${searchData.message}
-        <div class="result-details">
-            ФИО: ${escapeHtml(searchData.full_name)}<br>
-            Год выпуска: ${searchData.graduation_year}<br>
-            Специальность: ${escapeHtml(searchData.specialty)}
-        </div>
-        <button class="report-btn"
-                onclick="reportSuspiciousAction(${scanData.university_code}, '${String(scanData.diploma_number).replace(/'/g, "\\'")}')">
-            Сообщить о подозрительных действиях
-        </button>
-    `;
-                } else if (searchData.found === false) {
-                    resultDiv.className = 'result invalid';
-                    resultDiv.innerHTML = `${searchData.message}`;
-                } else {
-                    resultDiv.className = 'result invalid';
-                    resultDiv.innerHTML = `${searchData.message}`;
-                }
-                
-            } catch (error) {
-                console.error('Ошибка:', error);
-                resultDiv.className = 'result invalid';
-                resultDiv.innerHTML = 'Ошибка при обработке QR-кода';
-            
+    const fileInput = document.getElementById('file-in');
+    const file = fileInput.files[0];
+
+    if (!file) {
+        alert('Выберите файл с QR-кодом');
+        return;
+    }
+
+    const resultDiv = document.getElementById('result');
+    resultDiv.className = 'result';
+    resultDiv.classList.remove('hidden', 'valid', 'invalid');
+    resultDiv.innerHTML = '<div class="loading"></div> Распознавание QR-кода...';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const scanResponse = await fetch('/api/scan_qr', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-Token': '{{ csrf_token }}'
+            },
+            body: formData
+        });
+
+        const scanData = await scanResponse.json();
+
+        if (!scanData.success) {
+            resultDiv.className = 'result invalid';
+            resultDiv.innerHTML = `${scanData.message}`;
+            return;
         }
-         }
+
+        resultDiv.innerHTML = '<div class="loading"></div> Поиск диплома в реестре...';
+
+        const uni = universities.find(u => u.code === scanData.university_code);
+        if (uni) {
+            selectUni(uni.code, uni.name);
+        }
+
+        let searchResponse;
+        let searchData;
+
+        if (scanData.temp_token) {
+            searchResponse = await fetch('/api/search_diploma', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    temp_token: scanData.temp_token
+                })
+            });
+        } else {
+            searchResponse = await fetch('/api/search_diploma', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    university_code: scanData.university_code,
+                    diploma_number: scanData.diploma_number
+                })
+            });
+        }
+
+        searchData = await searchResponse.json();
+
+        if (searchData.expired) {
+            resultDiv.className = 'result invalid';
+            resultDiv.innerHTML = `❌ ${searchData.message}`;
+        } else if (searchData.valid) {
+            resultDiv.className = 'result valid';
+            resultDiv.innerHTML = `
+                ${searchData.message}
+                <div class="result-details">
+                    Статус: диплом найден в реестре
+                </div>
+                <button class="report-btn"
+                        onclick="reportSuspiciousAction(${scanData.university_code}, '${String(scanData.diploma_number).replace(/'/g, "\\'")}')">
+                    Сообщить о подозрительных действиях
+                </button>
+            `;
+        } else {
+            resultDiv.className = 'result invalid';
+            resultDiv.innerHTML = `${searchData.message}`;
+        }
+
+    } catch (error) {
+        console.error('Ошибка:', error);
+        resultDiv.className = 'result invalid';
+        resultDiv.innerHTML = 'Ошибка при обработке QR-кода';
+    }
+}
         // Обработка токена из URL (временная ссылка)
         function handleTokenFromUrl() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const token = urlParams.get('token');
-            
-            if (token) {
-                const resultDiv = document.getElementById('result');
-                resultDiv.classList.remove('hidden');
-                resultDiv.innerHTML = '<div class="loading"></div> Проверка диплома по временной ссылке...';
-                
-                fetch('/api/search_diploma', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({temp_token: token})
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.expired) {
-                        resultDiv.className = 'result invalid';
-                        resultDiv.innerHTML = `❌ ${data.message}`;
-                    } else if (data.valid) {
-    resultDiv.className = 'result valid';
-    resultDiv.innerHTML = `
-        ${data.message}
-        <div class="result-details">
-            ФИО: ${escapeHtml(data.full_name)}<br>
-            Год выпуска: ${data.graduation_year}<br>
-            Специальность: ${escapeHtml(data.specialty)}
-        </div>
-        <button class="report-btn"
-                onclick="reportSuspiciousAction(${data.university_code}, '${String(data.diploma_number).replace(/'/g, "\\'")}')">
-            Сообщить о подозрительных действиях
-        </button>
-    `;
-                    } else {
-                        resultDiv.className = 'result invalid';
-                        resultDiv.innerHTML = `${data.message}`;
-                    }
-                })
-                .catch(error => {
-                    console.error('Ошибка:', error);
-                    resultDiv.className = 'result invalid';
-                    resultDiv.innerHTML = 'Ошибка при проверке диплома';
-                });
-                
-                window.history.replaceState({}, document.title, window.location.pathname);
-            }
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+
+    if (!token) return;
+
+    const resultDiv = document.getElementById('result');
+    resultDiv.className = 'result';
+    resultDiv.classList.remove('hidden', 'valid', 'invalid');
+    resultDiv.innerHTML = '<div class="loading"></div> Проверка диплома по временной ссылке...';
+
+    fetch('/api/search_diploma', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({ temp_token: token })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.expired) {
+            resultDiv.className = 'result invalid';
+            resultDiv.innerHTML = `❌ ${data.message}`;
+        } else if (data.valid) {
+            resultDiv.className = 'result valid';
+            resultDiv.innerHTML = `
+                ${data.message}
+                <div class="result-details">
+                    Статус: диплом найден в реестре
+                </div>
+            `;
+        } else {
+            resultDiv.className = 'result invalid';
+            resultDiv.innerHTML = `${data.message}`;
         }
+    })
+    .catch(error => {
+        console.error('Ошибка:', error);
+        resultDiv.className = 'result invalid';
+        resultDiv.innerHTML = 'Ошибка при проверке диплома';
+    });
+
+    window.history.replaceState({}, document.title, window.location.pathname);
+}
         
         function escapeHtml(str) {
             if (!str) return '';
@@ -627,7 +641,10 @@ body.dark .report-btn {
     try {
         const response = await fetch('/api/report_suspicious_activity', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': '{{ csrf_token }}'
+            },
             body: JSON.stringify({
                 university_code: universityCode,
                 diploma_number: diplomaNumber,

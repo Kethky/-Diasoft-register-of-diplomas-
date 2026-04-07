@@ -99,8 +99,8 @@
         <div id="student-form" class="hidden">
             <h1>Студент</h1>
             <div class="form-container">
-                <input type="text" id="student-fullname" placeholder="ФИО полностью" autocomplete="off">
                 <input type="text" id="student-diploma" placeholder="Номер диплома" autocomplete="off">
+                <input type="text" id="student-secret" placeholder="Код доступа" autocomplete="off">
                 <div id="student-error" class="error-msg"></div>
                 <button class="btn submit" id="student-submit" onclick="loginStudent()">Войти</button>
             </div>
@@ -154,8 +154,8 @@
         }
         
         // DOM элементы для студента
-        const studentFullname = document.getElementById('student-fullname');
         const studentDiploma = document.getElementById('student-diploma');
+        const studentSecretInput = document.getElementById('student-secret');
         const studentError = document.getElementById('student-error');
         
         // DOM элементы для ВУЗа
@@ -170,7 +170,7 @@
             studentError.classList.remove('show');
             uniError.classList.remove('show');
             if (id === 'student-form') {
-                setTimeout(() => studentFullname.focus(), 100);
+                setTimeout(() => studentDiploma.focus(), 100);
             }
             if (id === 'uni-form') {
                 setTimeout(() => uniLogin.focus(), 100);
@@ -186,22 +186,27 @@
         }
         
         function loginStudent() {
-            var fullname = studentFullname.value.trim();
             var diploma = studentDiploma.value.trim();
-            
-            // Скрываем предыдущую ошибку
+            var studentSecret = studentSecretInput.value.trim();
+
             studentError.classList.remove('show');
-            
-            if (!fullname || !diploma) {
+
+            if (!diploma || !studentSecret) {
                 studentError.innerHTML = 'Заполните все поля';
                 studentError.classList.add('show');
                 return;
             }
-            
+
             fetch('/login/student', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({full_name: fullname, diploma_number: diploma})
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                   diploma_number: diploma,
+                   student_secret: studentSecret
+                })
             })
             .then(response => response.json())
             .then(data => {
@@ -229,7 +234,10 @@
             
             fetch('/login/university', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': '{{ csrf_token }}'
+                },
                 body: JSON.stringify({login: login, password: password})
             })
             .then(response => response.json())
@@ -244,10 +252,10 @@
         }
         
         // Горячие клавиши для формы студента
-        studentFullname.addEventListener('keydown', function(e) {
+        studentDiploma.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                studentDiploma.focus();
+                studentSecretInput.focus();
             }
             if (e.key === 'Escape') {
                 e.preventDefault();
@@ -255,8 +263,8 @@
                 showMain();
             }
         });
-        
-        studentDiploma.addEventListener('keydown', function(e) {
+
+        studentSecretInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 loginStudent();
@@ -266,9 +274,9 @@
                 e.stopPropagation();
                 showMain();
             }
-            if (e.key === 'Backspace' && studentDiploma.value === '') {
+            if (e.key === 'Backspace' && studentSecretInput.value === '') {
                 e.preventDefault();
-                studentFullname.focus();
+                studentDiploma.focus();
             }
         });
         

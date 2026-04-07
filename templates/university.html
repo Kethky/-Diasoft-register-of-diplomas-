@@ -635,7 +635,10 @@
             
             fetch('/api/university/add_diploma', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': '{{ csrf_token }}'
+                },
                 body: JSON.stringify({
                     full_name: fio,
                     graduation_year: year,
@@ -686,6 +689,9 @@
             
             fetch('/api/university/upload_excel', {
                 method: 'POST',
+                headers: {
+                    'X-CSRF-Token': '{{ csrf_token }}'
+                },
                 body: formData
             })
             .then(response => response.json())
@@ -711,7 +717,10 @@
         function toggleStatus(diplomaId, currentStatus) {
             fetch('/api/university/toggle_status', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': '{{ csrf_token }}'
+                },
                 body: JSON.stringify({
                     diploma_id: diplomaId,
                     current_status: currentStatus
