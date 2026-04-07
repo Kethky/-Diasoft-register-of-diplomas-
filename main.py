@@ -22,8 +22,9 @@ import secrets
 from datetime import datetime, timedelta
 from functools import wraps, lru_cache
 import openpyxl
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file, abort
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
+from werkzeug.utils import secure_filename
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
@@ -35,48 +36,113 @@ load_dotenv()
 
 # ---------- Инициализация приложения ----------
 app = Flask(__name__)
-app.secret_key = os.urandom(24).hex()
-app.config['SECRET_KEY'] = os.urandom(24).hex()
-DB_PATH = os.path.join(os.path.dirname(__file__), "database", "diploma_platform.db")
-serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
 
+secret_key = os.getenv("SECRET_KEY")
+if not secret_key:
+    secret_key = "dev-secret-key-change-me-123456789"
+    print("⚠️ SECRET_KEY не найден. Используется временный ключ для локального запуска.")
+
+app.config['SECRET_KEY'] = secret_key
+app.secret_key = app.config['SECRET_KEY']
+
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=False,   # для локального http-запуска на Windows
+    SESSION_COOKIE_SAMESITE='Lax',
+    MAX_CONTENT_LENGTH=5 * 1024 * 1024  # 5 MB
+)
+
+DB_PATH = os.path.join(os.path.dirname(__file__), "database", "diploma_platform.db")
+serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'], salt='diploma-temp-links')
 # ---------- Настройка rate limiter ----------
 limiter = Limiter(
     key_func=get_remote_address,
     default_limits=["1000 per day", "200 per hour"],
-    storage_uri="memory://",
+    storage_uri=os.getenv("RATELIMIT_STORAGE_URI", "memory://"),
 )
 limiter.init_app(app)
 
 # ---------- Функции для работы с базой данных ----------
 def update_db_schema():
-    """Добавляет необходимые поля в таблицу diplomas"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("PRAGMA table_info(diplomas)")
     columns = [col[1] for col in cursor.fetchall()]
-    if 'active_token' not in columns:
-        print("📦 Добавляем поле active_token...")
-        cursor.execute("ALTER TABLE diplomas ADD COLUMN active_token TEXT")
-        conn.commit()
-        print("✅ Поле active_token добавлено")
-    if 'hash_combined' not in columns:
-        print("📦 Добавляем поле hash_combined...")
-        cursor.execute("ALTER TABLE diplomas ADD COLUMN hash_combined TEXT")
-        conn.commit()
-        print("✅ Поле hash_combined добавлено")
-    if 'digital_signature' not in columns:
-        print("📦 Добавляем поле digital_signature...")
-        cursor.execute("ALTER TABLE diplomas ADD COLUMN digital_signature TEXT")
-        conn.commit()
-        print("✅ Поле digital_signature добавлено")
-    if 'signature_created_at' not in columns:
-        print("📦 Добавляем поле signature_created_at...")
-        cursor.execute("ALTER TABLE diplomas ADD COLUMN signature_created_at TIMESTAMP")
-        conn.commit()
-        print("✅ Поле signature_created_at добавлено")
+
+    migrations = [
+        ('active_token', "ALTER TABLE diplomas ADD COLUMN active_token TEXT"),
+        ('hash_combined', "ALTER TABLE diplomas ADD COLUMN hash_combined TEXT"),
+        ('digital_signature', "ALTER TABLE diplomas ADD COLUMN digital_signature TEXT"),
+        ('signature_created_at', "ALTER TABLE diplomas ADD COLUMN signature_created_at TIMESTAMP"),
+        ('student_secret_hash', "ALTER TABLE diplomas ADD COLUMN student_secret_hash TEXT"),
+        ('active_token_expires_at', "ALTER TABLE diplomas ADD COLUMN active_token_expires_at TIMESTAMP"),
+    ]
+
+    for column_name, sql in migrations:
+        if column_name not in columns:
+            cursor.execute(sql)
+            conn.commit()
+
     conn.close()
 
+def generate_csrf_token():
+    token = secrets.token_urlsafe(32)
+    session['csrf_token'] = token
+    return token
+
+@app.context_processor
+def inject_csrf_token():
+    return dict(csrf_token=generate_csrf_token())
+
+def require_csrf(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        sent_token = request.headers.get('X-CSRF-Token')
+        session_token = session.get('csrf_token')
+        if not sent_token or not session_token or sent_token != session_token:
+            return jsonify({"error": "CSRF token invalid"}), 403
+        return f(*args, **kwargs)
+    return wrapper
+
+def generate_student_secret():
+    return secrets.token_urlsafe(12)
+
+def hash_student_secret(secret: str) -> str:
+    return bcrypt.hashpw(secret.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_student_secret(secret: str, secret_hash: str) -> bool:
+    if not secret_hash:
+        return False
+    return bcrypt.checkpw(secret.encode('utf-8'), secret_hash.encode('utf-8'))
+
+def get_current_student_diploma():
+    if session.get('role') != 'student' or 'diploma_id' not in session:
+        return None
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, university_code, full_name, graduation_year, specialty,
+               diploma_number, status, active_token, active_token_expires_at
+        FROM diplomas
+        WHERE id = ?
+    """, (session['diploma_id'],))
+    row = cursor.fetchone()
+    conn.close()
+    return row
+
+def require_student(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if session.get('role') != 'student' or 'diploma_id' not in session:
+            return jsonify({"error": "Не авторизован"}), 401
+        return f(*args, **kwargs)
+    return wrapper
+
+def safe_excel_value(value):
+    if isinstance(value, str) and value[:1] in ('=', '+', '-', '@'):
+        return "'" + value
+    return value
 
 def log_verification(diploma_id, university_code, diploma_number, verification_type, token, result):
     """Записывает информацию о проверке диплома"""
@@ -91,6 +157,9 @@ def log_verification(diploma_id, university_code, diploma_number, verification_t
     ''', (diploma_id, university_code, diploma_number, verification_type, token, ip, user_agent, result))
     conn.commit()
     conn.close()
+
+def get_hr_api_keys():
+    return [k.strip() for k in os.getenv("HR_API_KEYS", "").split(",") if k.strip()]
 
 def create_security_tables():
     """Создаёт таблицы для безопасности (блокировка IP, логи)"""
@@ -144,20 +213,26 @@ def get_university_list():
     return [{"code": row[0], "name": row[1]} for row in rows]
 
 def check_university_auth(login: str, password: str) -> dict:
-    """Проверяет логин и пароль ВУЗа."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT university_code, name, password_hash FROM universities WHERE login = ?", (login,))
+    cursor.execute("""
+        SELECT university_code, name, password_hash
+        FROM universities
+        WHERE login = ?
+    """, (login,))
     row = cursor.fetchone()
     conn.close()
-    if row:
-        university_code, name, stored_hash = row
-        if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
-            return {"success": True, "university_code": university_code, "name": name, "message": "Вход выполнен"}
-        else:
-            return {"success": False, "message": "Неверный пароль"}
-    else:
-        return {"success": False, "message": "Логин не найден"}
+
+    generic_error = {"success": False, "message": "Неверный логин или пароль"}
+
+    if not row:
+        return generic_error
+
+    university_code, name, stored_hash = row
+    if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
+        return {"success": True, "university_code": university_code, "name": name, "message": "Вход выполнен"}
+
+    return generic_error
 
 def save_suspicious_report(university_code: int, diploma_number: str, comment: str):
     report = {
@@ -171,14 +246,25 @@ def save_suspicious_report(university_code: int, diploma_number: str, comment: s
     with open(log_file, "a", encoding="utf-8") as f:
         f.write(json.dumps(report, ensure_ascii=False) + "\n")
 
-def check_student_auth(full_name: str, diploma_number: str) -> bool:
-    """Проверяет студента по ФИО и номеру диплома"""
+def check_student_auth(diploma_number: str, student_secret: str):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute('SELECT id FROM diplomas WHERE full_name = ? AND diploma_number = ?', (full_name, diploma_number))
+    cursor.execute("""
+        SELECT id, student_secret_hash
+        FROM diplomas
+        WHERE diploma_number = ?
+    """, (diploma_number,))
     row = cursor.fetchone()
     conn.close()
-    return row is not None
+
+    if not row:
+        return None
+
+    diploma_id, student_secret_hash = row
+    if verify_student_secret(student_secret, student_secret_hash):
+        return diploma_id
+
+    return None
 
 def get_university_diplomas(university_code: int):
     """Возвращает список дипломов для конкретного ВУЗа"""
@@ -382,25 +468,34 @@ def university():
 
 @app.route('/student')
 def student():
-    if 'role' not in session or session.get('role') != 'student':
+    if session.get('role') != 'student' or 'diploma_id' not in session:
         return redirect(url_for('index'))
-    full_name = session.get('full_name')
-    diploma_number = session.get('diploma_number')
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute('''
-        SELECT status, graduation_year, specialty, university_code
-        FROM diplomas WHERE full_name = ? AND diploma_number = ?
-    ''', (full_name, diploma_number))
+    cursor.execute("""
+        SELECT id, full_name, diploma_number, status, graduation_year, specialty, university_code
+        FROM diplomas
+        WHERE id = ?
+    """, (session['diploma_id'],))
     row = cursor.fetchone()
     conn.close()
+
     if not row:
         session.clear()
         return redirect(url_for('index'))
-    status, graduation_year, specialty, university_code = row
-    return render_template('student.html', full_name=full_name, diploma_number=diploma_number,
-                           status=status, graduation_year=graduation_year,
-                           specialty=specialty, university_code=university_code)
+
+    diploma_id, full_name, diploma_number, status, graduation_year, specialty, university_code = row
+
+    return render_template(
+        'student.html',
+        full_name=full_name,
+        diploma_number=diploma_number,
+        status=status,
+        graduation_year=graduation_year,
+        specialty=specialty,
+        university_code=university_code
+    )
 
 # ---------- API для ВУЗов ----------
 @app.route('/api/universities')
@@ -482,13 +577,27 @@ def api_add_diploma():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     try:
+        student_secret = generate_student_secret()
+        student_secret_hash = hash_student_secret(student_secret)
+
         cursor.execute('''
-            INSERT INTO diplomas (university_code, full_name, graduation_year, specialty, diploma_number, status, hash_combined, digital_signature, signature_created_at)
-            VALUES (?, ?, ?, ?, ?, 1, ?, ?, CURRENT_TIMESTAMP)
-        ''', (university_code, full_name, graduation_year, specialty, diploma_number, hash_combined, digital_signature))
+            INSERT INTO diplomas (
+                university_code, full_name, graduation_year, specialty,
+                diploma_number, status, hash_combined, digital_signature,
+                signature_created_at, student_secret_hash
+            )
+            VALUES (?, ?, ?, ?, ?, 1, ?, ?, CURRENT_TIMESTAMP, ?)
+        ''', (
+            university_code, full_name, graduation_year, specialty,
+            diploma_number, hash_combined, digital_signature, student_secret_hash
+        ))
         conn.commit()
         conn.close()
-        return jsonify({"success": True, "message": "Диплом добавлен и подписан", "hash": hash_combined})
+        return jsonify({
+            "success": True,
+            "message": "Диплом добавлен и подписан",
+            "student_secret": student_secret
+        })
     except sqlite3.IntegrityError:
         conn.close()
         return jsonify({"success": False, "message": "Диплом с таким номером уже существует"})
@@ -539,10 +648,10 @@ def api_export_excel():
         status_text = "Активен" if diploma['status'] == 1 else "Аннулирован"
 
         ws.cell(row=row_num, column=1, value=idx).border = border
-        ws.cell(row=row_num, column=2, value=diploma['full_name']).border = border
+        ws.cell(row=row_num, column=2, value=safe_excel_value(diploma['full_name'])).border = border
         ws.cell(row=row_num, column=3, value=diploma['graduation_year']).border = border
-        ws.cell(row=row_num, column=4, value=diploma['specialty']).border = border
-        ws.cell(row=row_num, column=5, value=diploma['diploma_number']).border = border
+        ws.cell(row=row_num, column=4, value=safe_excel_value(diploma['specialty'])).border = border
+        ws.cell(row=row_num, column=5, value=safe_excel_value(diploma['diploma_number'])).border = border
         ws.cell(row=row_num, column=6, value=status_text).border = border
 
         if diploma['status'] == 0:
@@ -682,10 +791,37 @@ def api_upload_excel():
                 errors.append(f"Строка {idx+1}: год должен быть числом")
                 continue
             try:
+                hash_combined, salt = calculate_diploma_hash(
+                    university_code,
+                    diploma_number,
+                    full_name,
+                    graduation_year,
+                    specialty
+                )           
+
+                diploma_data_for_sign = {
+                    "university_code": university_code,
+                    "diploma_number": diploma_number,
+                    "full_name": full_name,
+                    "graduation_year": graduation_year,
+                    "specialty": specialty
+                }
+                digital_signature = sign_diploma(university_code, diploma_data_for_sign)
+
+                student_secret = generate_student_secret()
+                student_secret_hash = hash_student_secret(student_secret)
+
                 cursor.execute('''
-                    INSERT INTO diplomas (university_code, full_name, graduation_year, specialty, diploma_number, status)
-                    VALUES (?, ?, ?, ?, ?, 1)
-                ''', (university_code, full_name, graduation_year, specialty, diploma_number))
+                    INSERT INTO diplomas (
+                        university_code, full_name, graduation_year, specialty,
+                        diploma_number, status, hash_combined, digital_signature,
+                        signature_created_at, student_secret_hash
+                    )
+                    VALUES (?, ?, ?, ?, ?, 1, ?, ?, CURRENT_TIMESTAMP, ?)
+                ''', (
+                    university_code, full_name, graduation_year, specialty,
+                    diploma_number, hash_combined, digital_signature, student_secret_hash
+                ))
                 added_count += 1
             except sqlite3.IntegrityError:
                 error_count += 1
@@ -705,29 +841,41 @@ def api_upload_excel():
 @limiter.limit("1000 per day", error_message="Достигнут дневной лимит запросов.")
 @check_blocked_ip
 def api_search_diploma():
-    data = request.get_json()
+    data = request.get_json() or {}
     temp_token = data.get('temp_token')
 
+    diploma_id = None
+    verification_type = "manual"
+
     if temp_token:
+        verification_type = "temp_link"
         try:
             token_data = serializer.loads(temp_token)
             expiry = token_data.get('expiry')
-            if expiry is None:
-                return jsonify({"valid": False, "expired": False, "message": "Некорректный токен"})
-            if time.time() > expiry:
-                return jsonify({"valid": False, "expired": True, "message": "Срок действия ссылки истёк"})
+            diploma_id = token_data.get('diploma_id')
             university_code = token_data.get('university_code')
             diploma_number = token_data.get('diploma_number')
+
+            if expiry is None:
+                return jsonify({"valid": False, "expired": False, "message": "Некорректный токен"}), 400
+
+            if time.time() > expiry:
+                return jsonify({"valid": False, "expired": True, "message": "Срок действия ссылки истёк"}), 410
+
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
-            cursor.execute('SELECT active_token FROM diplomas WHERE university_code = ? AND diploma_number = ?',
-                           (university_code, diploma_number))
+            cursor.execute("""
+                SELECT active_token FROM diplomas
+                WHERE id = ? AND university_code = ? AND diploma_number = ?
+            """, (diploma_id, university_code, diploma_number))
             row = cursor.fetchone()
             conn.close()
-            if row and row[0] != temp_token:
-                return jsonify({"valid": False, "expired": True, "message": "QR-код был отозван"})
+
+            if not row or row[0] != temp_token:
+                return jsonify({"valid": False, "expired": True, "message": "QR-код был отозван"}), 410
+
         except BadSignature:
-            return jsonify({"valid": False, "expired": False, "message": "Недействительная ссылка"})
+            return jsonify({"valid": False, "expired": False, "message": "Недействительная ссылка"}), 400
     else:
         university_code = data.get('university_code')
         diploma_number = data.get('diploma_number', '').strip()
@@ -741,22 +889,40 @@ def api_search_diploma():
         result["university_code"] = university_code
         result["diploma_number"] = diploma_number
 
-    return jsonify(result)
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id FROM diplomas
+            WHERE university_code = ? AND diploma_number = ?
+        """, (university_code, diploma_number))
+        row = cursor.fetchone()
+        conn.close()
 
-    # === ЛОГИРОВАНИЕ ===
-    # Получаем diploma_id
-    diploma_id = None
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM diplomas WHERE university_code = ? AND diploma_number = ?",
-                   (university_code, diploma_number))
-    row = cursor.fetchone()
-    if row:
-        diploma_id = row[0]
-    conn.close()
+        if row:
+            diploma_id = row[0]
 
-    # Определяем тип проверки
-    verification_type = "temp_link" if temp_token else "manual"
+        if result.get('digital_signature'):
+            diploma_data = {
+                "university_code": university_code,
+                "diploma_number": diploma_number,
+                "full_name": result['full_name'],
+                "graduation_year": result['graduation_year'],
+                "specialty": result['specialty']
+            }
+            signature_valid = verify_diploma_signature(
+                university_code,
+                diploma_data,
+                result['digital_signature']
+            )
+            result['signature_valid'] = signature_valid
+            result['signature_message'] = (
+                "🔐 Цифровая подпись действительна"
+                if signature_valid else
+                "❌ Цифровая подпись недействительна"
+            )
+        else:
+            result['signature_valid'] = False
+            result['signature_message'] = "⚠️ Цифровая подпись отсутствует"
 
     log_verification(
         diploma_id=diploma_id,
@@ -766,24 +932,13 @@ def api_search_diploma():
         token=temp_token if temp_token else None,
         result=result.get('message', 'unknown')
     )
-    # === КОНЕЦ ЛОГИРОВАНИЯ ===
 
-    # Добавляем информацию о цифровой подписи
-    if result.get('found') and result.get('digital_signature'):
-        diploma_data = {
-            "university_code": university_code,
-            "diploma_number": diploma_number,
-            "full_name": result['full_name'],
-            "graduation_year": result['graduation_year'],
-            "specialty": result['specialty']
-        }
-        signature_valid = verify_diploma_signature(university_code, diploma_data, result['digital_signature'])
-        result['signature_valid'] = signature_valid
-        result[
-            'signature_message'] = "🔐 Цифровая подпись действительна" if signature_valid else "❌ Цифровая подпись НЕДЕЙСТВИТЕЛЬНА"
-    elif result.get('found'):
-        result['signature_valid'] = False
-        result['signature_message'] = "⚠️ Цифровая подпись отсутствует"
+    # Публичный режим не должен раскрывать ПДн
+    if not temp_token and result.get("found"):
+        result.pop("full_name", None)
+        result.pop("graduation_year", None)
+        result.pop("specialty", None)
+        result.pop("digital_signature", None)
 
     return jsonify(result)
 
@@ -794,163 +949,229 @@ def api_search_diploma():
 @check_blocked_ip
 def api_scan_qr():
     if 'file' not in request.files:
-        return jsonify({"success": False, "message": "Файл не выбран"})
+        return jsonify({"success": False, "message": "Файл не выбран"}), 400
+
     file = request.files['file']
-    if file.filename == '':
-        return jsonify({"success": False, "message": "Файл не выбран"})
-    temp_path = os.path.join(tempfile.gettempdir(), file.filename)
-    file.save(temp_path)
+    if not file or file.filename == '':
+        return jsonify({"success": False, "message": "Файл не выбран"}), 400
+
+    temp_path = None
     try:
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+            file.save(tmp.name)
+            temp_path = tmp.name
+
         image = cv2.imread(temp_path)
         if image is None:
-            return jsonify({"success": False, "message": "Не удалось открыть изображение"})
+            return jsonify({"success": False, "message": "Не удалось открыть изображение"}), 400
+
         detector = cv2.QRCodeDetector()
-        data, points, _ = detector.detectAndDecode(image)
-        os.remove(temp_path)
-        if not data:
-            return jsonify({"success": False, "message": "QR-код не найден или не удалось декодировать"})
+        qr_data, points, _ = detector.detectAndDecode(image)
+
+        if not qr_data:
+            return jsonify({"success": False, "message": "QR-код не найден или не удалось декодировать"}), 400
+
         from urllib.parse import urlparse, parse_qs
-        parsed = urlparse(data)
+        parsed = urlparse(qr_data)
         params = parse_qs(parsed.query)
+
         token = params.get('token', [None])[0]
         uni_code = params.get('uni_code', [None])[0]
         dip_num = params.get('dip_num', [None])[0]
 
+        # Ветка для временной ссылки / QR с token
         if token:
             try:
                 token_data = serializer.loads(token)
+
                 expiry = token_data.get('expiry')
-                if expiry and time.time() > expiry:
-                    return jsonify({"success": False, "message": "Срок действия ссылки истёк"})
+                diploma_id = token_data.get('diploma_id')
                 university_code = token_data.get('university_code')
                 diploma_number = token_data.get('diploma_number')
+
+                if not university_code or not diploma_number:
+                    return jsonify({"success": False, "message": "Некорректный токен QR-кода"}), 400
+
+                if expiry and time.time() > expiry:
+                    return jsonify({"success": False, "message": "Срок действия ссылки истёк"}), 410
+
                 conn = sqlite3.connect(DB_PATH)
                 cursor = conn.cursor()
-                cursor.execute('SELECT active_token FROM diplomas WHERE university_code = ? AND diploma_number = ?',
-                               (university_code, diploma_number))
+
+                if diploma_id is not None:
+                    cursor.execute("""
+                        SELECT active_token
+                        FROM diplomas
+                        WHERE id = ? AND university_code = ? AND diploma_number = ?
+                    """, (diploma_id, university_code, diploma_number))
+                else:
+                    cursor.execute("""
+                        SELECT active_token
+                        FROM diplomas
+                        WHERE university_code = ? AND diploma_number = ?
+                    """, (university_code, diploma_number))
+
                 row = cursor.fetchone()
                 conn.close()
-                if row and row[0] != token:
-                    return jsonify({"success": False, "message": "QR-код был отозван"})
-                if university_code and diploma_number:
-                    # === ЛОГИРОВАНИЕ QR ===
-                    log_verification(
-                        diploma_id=None,
-                        university_code=university_code,
-                        diploma_number=diploma_number,
-                        verification_type="qr_scan",
-                        token=token,
-                        result="scanned"
-                    )
-                    # === КОНЕЦ ЛОГИРОВАНИЯ ===
-                    return jsonify(
-                        {"success": True, "university_code": int(university_code), "diploma_number": diploma_number})
-                else:
-                    return jsonify({"success": False, "message": "Токен не содержит данных о дипломе"})
+
+                if not row:
+                    return jsonify({"success": False, "message": "Диплом по QR-коду не найден"}), 404
+
+                if row[0] != token:
+                    return jsonify({"success": False, "message": "QR-код был отозван"}), 410
+
+                log_verification(
+                    diploma_id=diploma_id,
+                    university_code=int(university_code),
+                    diploma_number=str(diploma_number),
+                    verification_type="qr_scan",
+                    token=token,
+                    result="scanned"
+                )
+
+                return jsonify({
+                    "success": True,
+                    "university_code": int(university_code),
+                    "diploma_number": str(diploma_number),
+                    "temp_token": token
+                })
+
             except BadSignature:
-                return jsonify({"success": False, "message": "Недействительная ссылка"})
-            except Exception as e:
-                return jsonify({"success": False, "message": f"Ошибка проверки токена: {str(e)}"})
-        elif uni_code and dip_num:
-            # === ЛОГИРОВАНИЕ QR (старый формат) ===
+                return jsonify({"success": False, "message": "Недействительная ссылка"}), 400
+
+        # Ветка для старого QR с uni_code + dip_num
+        if uni_code and dip_num:
             log_verification(
                 diploma_id=None,
                 university_code=int(uni_code),
-                diploma_number=dip_num,
+                diploma_number=str(dip_num),
                 verification_type="qr_scan",
                 token=None,
                 result="scanned"
             )
-            # === КОНЕЦ ЛОГИРОВАНИЯ ===
-            return jsonify({"success": True, "university_code": int(uni_code), "diploma_number": dip_num})
-        else:
-            return jsonify({"success": False, "message": "QR-код не содержит данных о дипломе"})
-    except Exception as e:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-        return jsonify({"success": False, "message": f"Ошибка при обработке: {str(e)}"})
+            return jsonify({
+                "success": True,
+                "university_code": int(uni_code),
+                "diploma_number": str(dip_num)
+            })
 
+        return jsonify({"success": False, "message": "QR-код не содержит данных о дипломе"}), 400
+
+    except Exception as e:
+        app.logger.exception("QR scan failed")
+        return jsonify({"success": False, "message": f"Ошибка при обработке QR-кода: {str(e)}"}), 500
+
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
+
+@app.route('/api/generate_qr', methods=['POST'])
 @app.route('/api/generate_qr', methods=['POST'])
 def api_generate_qr():
     """Генерирует QR-код из URL и возвращает base64 изображение"""
-    data = request.get_json()
+    data = request.get_json() or {}
     url = data.get('url')
+
     if not url:
         return jsonify({"success": False, "message": "URL не указан"}), 400
+
     try:
-        qr = qrcode.QRCode(version=5, error_correction=qrcode.constants.ERROR_CORRECT_H,
-                           box_size=12, border=4)
+        qr = qrcode.QRCode(
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=10,
+            border=4
+        )
         qr.add_data(url)
         qr.make(fit=True)
+
         img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
-        width, height = img.size
-        img = img.resize((width * 2, height * 2))
+
         buffered = io.BytesIO()
         img.save(buffered, format="PNG")
         img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
-        return jsonify({"success": True, "qr_image": f"data:image/png;base64,{img_base64}"})
+
+        return jsonify({
+            "success": True,
+            "qr_image": f"data:image/png;base64,{img_base64}"
+        })
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        app.logger.exception("QR generation failed")
+        return jsonify({"success": False, "message": f"Ошибка генерации QR: {str(e)}"}), 500
 
 @app.route('/api/generate_temp_link', methods=['POST'])
 @limiter.limit("10 per hour", error_message="Слишком много запросов на создание ссылок.")
 @limiter.limit("30 per day", error_message="Достигнут дневной лимит создания ссылок.")
 @check_blocked_ip
+@require_student
 def api_generate_temp_link():
-    data = request.get_json()
-    university_code = data.get('university_code')
-    diploma_number = data.get('diploma_number', '').strip()
-    expiry_seconds = data.get('expiry_seconds', 3600)
-    if not university_code or not diploma_number:
-        return jsonify({"error": "Не указан код вуза или номер диплома"}), 400
+    data = request.get_json() or {}
+    expiry_seconds = int(data.get('expiry_seconds', 3600))
+
+    max_seconds = 30 * 24 * 60 * 60
+    min_seconds = 60
+
+    if expiry_seconds > max_seconds:
+        expiry_seconds = max_seconds
+    if expiry_seconds < min_seconds:
+        expiry_seconds = min_seconds
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute('SELECT full_name, status, graduation_year, specialty FROM diplomas WHERE university_code = ? AND diploma_number = ?',
-                   (university_code, diploma_number))
+    cursor.execute("""
+        SELECT id, university_code, diploma_number
+        FROM diplomas
+        WHERE id = ?
+    """, (session['diploma_id'],))
     row = cursor.fetchone()
+
     if not row:
         conn.close()
         return jsonify({"success": False, "message": "Диплом не найден"}), 404
-    full_name, status, grad_year, specialty = row
-    max_seconds = 30 * 24 * 60 * 60
-    if expiry_seconds > max_seconds:
-        expiry_seconds = max_seconds
-    min_seconds = 60
-    if expiry_seconds < min_seconds:
-        expiry_seconds = min_seconds
-    expiry_timestamp = time.time() + expiry_seconds
+
+    diploma_id, university_code, diploma_number = row
+    expiry_timestamp = int(time.time()) + expiry_seconds
+
     token = serializer.dumps({
+        "diploma_id": diploma_id,
         "university_code": university_code,
         "diploma_number": diploma_number,
-        "full_name": full_name,
         "expiry": expiry_timestamp
     })
-    cursor.execute('UPDATE diplomas SET active_token = ? WHERE university_code = ? AND diploma_number = ?',
-                   (token, university_code, diploma_number))
+
+    cursor.execute("""
+        UPDATE diplomas
+        SET active_token = ?, active_token_expires_at = datetime(?, 'unixepoch')
+        WHERE id = ?
+    """, (token, expiry_timestamp, diploma_id))
     conn.commit()
     conn.close()
+
     temp_link = f"{request.host_url}?token={token}"
     total_hours = expiry_seconds / 3600
     days = int(total_hours // 24)
     hours = int(total_hours % 24)
-    return jsonify({"success": True, "link": temp_link,
-                    "expires_in_seconds": expiry_seconds,
-                    "expires_in_days": days, "expires_in_hours": hours})
+
+    return jsonify({
+        "success": True,
+        "link": temp_link,
+        "expires_in_seconds": expiry_seconds,
+        "expires_in_days": days,
+        "expires_in_hours": hours
+    })
 
 @app.route('/api/revoke_qr', methods=['POST'])
+@require_student
 def api_revoke_qr():
-    """Отзывает текущий QR-код (удаляет active_token)"""
-    data = request.get_json()
-    university_code = data.get('university_code')
-    diploma_number = data.get('diploma_number', '').strip()
-    if not university_code or not diploma_number:
-        return jsonify({"success": False, "message": "Не указаны данные"}), 400
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute('UPDATE diplomas SET active_token = NULL WHERE university_code = ? AND diploma_number = ?',
-                   (university_code, diploma_number))
+    cursor.execute("""
+        UPDATE diplomas
+        SET active_token = NULL, active_token_expires_at = NULL
+        WHERE id = ?
+    """, (session['diploma_id'],))
     conn.commit()
     conn.close()
+
     return jsonify({"success": True, "message": "QR-код отозван"})
 
 # ---------- API для HR-порталов ----------
@@ -970,11 +1191,13 @@ def api_verify_diploma_for_hr():
     if not university_code:
         return jsonify({"error": "Не указан код вуза", "status": "error"}), 400
 
-    HR_API_KEYS = os.environ.get('HR_API_KEYS', '').split(',')
-    if HR_API_KEYS and HR_API_KEYS[0]:
-        if api_key not in HR_API_KEYS:
-            log_security_event(request.remote_addr, '/api/verify_diploma_for_hr')
-            return jsonify({"error": "Недействительный API ключ", "status": "error"}), 401
+    HR_API_KEYS = get_hr_api_keys()
+    if not HR_API_KEYS:
+        return jsonify({"error": "HR API отключён: не настроены API ключи", "status": "error"}), 503
+
+    if api_key not in HR_API_KEYS:
+        log_security_event(request.remote_addr, request.path)
+        return jsonify({"error": "Недействительный API ключ", "status": "error"}), 401
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -1007,8 +1230,7 @@ def api_verify_diploma_for_hr():
                                f"ФИО не совпадают: {full_name_from_request} != {full_name_db}")
             response.update({
                 "status": "invalid",
-                "message": "ФИО владельца диплома не совпадает",
-                "full_name_expected": full_name_db
+                "message": "ФИО владельца диплома не совпадает"
             })
             return jsonify(response), 200
 
@@ -1046,11 +1268,13 @@ def api_verify_diplomas_batch():
             "status": "error"
         }), 400
 
-    HR_API_KEYS = os.environ.get('HR_API_KEYS', '').split(',')
-    if HR_API_KEYS and HR_API_KEYS[0]:
-        if api_key not in HR_API_KEYS:
-            log_security_event(request.remote_addr, '/api/verify_diplomas_batch')
-            return jsonify({"error": "Недействительный API ключ", "status": "error"}), 401
+    HR_API_KEYS = get_hr_api_keys()
+    if not HR_API_KEYS:
+        return jsonify({"error": "HR API отключён: не настроены API ключи", "status": "error"}), 503
+
+    if api_key not in HR_API_KEYS:
+        log_security_event(request.remote_addr, request.path)
+        return jsonify({"error": "Недействительный API ключ", "status": "error"}), 401
 
     results = []
     valid_count = 0
@@ -1124,24 +1348,31 @@ def api_verify_diplomas_batch():
 @limiter.limit("100 per hour", error_message="Достигнут лимит попыток входа.")
 @check_blocked_ip
 def login_student():
-    data = request.get_json()
-    full_name = data.get('full_name', '').strip()
+    data = request.get_json() or {}
     diploma_number = data.get('diploma_number', '').strip()
-    if check_student_auth(full_name, diploma_number):
+    student_secret = data.get('student_secret', '').strip()
+
+    if not diploma_number or not student_secret:
+        return jsonify({"success": False, "message": "Заполните все поля"}), 400
+
+    diploma_id = check_student_auth(diploma_number, student_secret)
+    if diploma_id:
+        session.clear()
         session['role'] = 'student'
-        session['full_name'] = full_name
-        session['diploma_number'] = diploma_number
+        session['diploma_id'] = diploma_id
+        session.modified = True
         return jsonify({"success": True, "redirect": "/student"})
-    else:
-        ip = request.remote_addr
-        log_security_event(ip, '/login/student')
-        return jsonify({"success": False, "message": "Неверное ФИО или номер диплома"})
+
+    ip = request.remote_addr
+    log_security_event(ip, '/login/student')
+    return jsonify({"success": False, "message": "Неверный номер диплома или код доступа"}), 401
 
 @app.route('/login/university', methods=['POST'])
 @limiter.limit("10 per minute", error_message="Слишком много попыток входа.")
 @limiter.limit("30 per hour", error_message="Достигнут лимит попыток входа.")
 @check_blocked_ip
 def login_university():
+    session.clear()
     data = request.get_json()
     login = data.get('login', '').strip()
     password = data.get('password', '')
@@ -1158,21 +1389,17 @@ def login_university():
         return jsonify({"success": False, "message": result["message"]})
 
 @app.route('/api/student/status')
+@require_student
 def api_student_status():
-    if 'role' not in session or session.get('role') != 'student':
-        return jsonify({"error": "Не авторизован"}), 401
-    full_name = session.get('full_name')
-    diploma_number = session.get('diploma_number')
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute('SELECT status FROM diplomas WHERE full_name = ? AND diploma_number = ?',
-                   (full_name, diploma_number))
+    cursor.execute('SELECT status FROM diplomas WHERE id = ?', (session['diploma_id'],))
     row = cursor.fetchone()
     conn.close()
+
     if row:
         return jsonify({"status": row[0]})
-    else:
-        return jsonify({"status": None})
+    return jsonify({"status": None})
 
 @app.route('/logout')
 def logout():
@@ -1191,7 +1418,8 @@ def main():
     print("\n🚀 Запуск веб-сервера...")
     print("📍 Откройте в браузере: http://127.0.0.1:5000")
     print("🛑 Для остановки нажмите Ctrl+C\n")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    debug_mode = os.getenv("FLASK_DEBUG", "0") == "1"
+    app.run(debug=debug_mode, host='127.0.0.1' if debug_mode else '0.0.0.0', port=5000)
 
 if __name__ == "__main__":
     main()

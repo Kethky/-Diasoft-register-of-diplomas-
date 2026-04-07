@@ -267,7 +267,101 @@ def show_verification_logs():
     view_verification_logs(conn)
     conn.close()
 
+def generate_student_secrets():
+    """Создаёт коды доступа для дипломов, у которых ещё нет student_secret_hash"""
+    if not os.path.exists(DB_PATH):
+        print(f"\nФайл базы данных не найден: {DB_PATH}")
+        print("Сначала создайте базу или проверьте путь.")
+        return
 
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, diploma_number
+        FROM diplomas
+        WHERE student_secret_hash IS NULL OR student_secret_hash = ''
+    """)
+    rows = cursor.fetchall()
+
+    if not rows:
+        print("\nВсе дипломы уже имеют коды доступа.")
+        conn.close()
+        return
+
+    for diploma_id, diploma_number in rows:
+        secret = secrets.token_urlsafe(12)
+        secret_hash = hash_password(secret)
+        cursor.execute(
+            "UPDATE diplomas SET student_secret_hash = ? WHERE id = ?",
+            (secret_hash, diploma_id)
+        )
+        print(f"{university_code} - {diploma_number}: {secret}")
+
+    conn.commit()
+    conn.close()
+    print("\nКоды доступа успешно созданы.")
+
+def reset_student_secret():
+    """Перевыпускает код доступа для одного диплома"""
+    if not os.path.exists(DB_PATH):
+        print(f"\nФайл базы данных не найден: {DB_PATH}")
+        return
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    try:
+        university_code = input("\nВведите код ВУЗа: ").strip()
+        diploma_number = input("Введите номер диплома: ").strip()
+
+        if not university_code or not diploma_number:
+            print("Код ВУЗа и номер диплома обязательны.")
+            conn.close()
+            return
+
+        try:
+            university_code = int(university_code)
+        except ValueError:
+            print("Код ВУЗа должен быть числом.")
+            conn.close()
+            return
+
+        cursor.execute("""
+            SELECT id, full_name
+            FROM diplomas
+            WHERE university_code = ? AND diploma_number = ?
+        """, (university_code, diploma_number))
+        row = cursor.fetchone()
+
+        if not row:
+            print("Диплом не найден.")
+            conn.close()
+            return
+
+        diploma_id, full_name = row
+
+        new_secret = secrets.token_urlsafe(12)
+        new_secret_hash = hash_password(new_secret)
+
+        cursor.execute("""
+            UPDATE diplomas
+            SET student_secret_hash = ?
+            WHERE id = ?
+        """, (new_secret_hash, diploma_id))
+
+        conn.commit()
+
+        print("\nКод доступа успешно перевыпущен.")
+        print(f"Студент: {full_name}")
+        print(f"Номер диплома: {diploma_number}")
+        print(f"Новый код доступа: {new_secret}")
+        print("Сохраните его сразу: повторно старый код показать нельзя.")
+
+    except Exception as e:
+        print(f"Ошибка при перевыпуске кода: {e}")
+    finally:
+        conn.close()
 # ---------- Главное меню ----------
 def main():
     # Проверка существования таблиц
@@ -290,8 +384,10 @@ def main():
         print("3. Список вузов")
         print("4. Логи безопасности (security_logs)")
         print("5. Логи проверок дипломов (verification_logs)")
-        print("6. Выход")
-        choice = input("\nВыберите действие (1-6): ").strip()
+        print("6. Создание кода для входа студентам.")
+        print("7. Пересоздание кода для входа студентам.")
+        print("8. Выход")
+        choice = input("\nВыберите действие (1-8): ").strip()
 
         if choice == '1':
             add_university()
@@ -304,6 +400,10 @@ def main():
         elif choice == '5':
             show_verification_logs()
         elif choice == '6':
+            generate_student_secrets()
+        elif choice == '7':
+            reset_student_secret()
+        elif choice == '8':
             print("Выход из программы.")
             break
         else:
