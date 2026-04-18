@@ -1,0 +1,14 @@
+Flask
+python-dotenv
+bcrypt
+qrcode
+opencv-python
+pandas
+openpyxl
+Flask-Limiter
+cryptography
+itsdangerous
+reportlab
+PyMuPDF
+Pillow
+pytesseract
