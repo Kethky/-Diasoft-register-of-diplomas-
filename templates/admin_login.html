@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>Вход администратора</title>
+      <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_login.css') }}">
+
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Админ-панель</h1>
+      <div class="muted">Войдите под учетной записью администратора.</div>
+      <form id="loginForm">
+        <label for="login">Логин</label>
+        <input id="login" name="login" autocomplete="username" required>
+
+        <label for="password">Пароль</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+        <button type="submit">Войти</button>
+      </form>
+      <div style="display:flex; gap:10px; margin-top:14px;">
+        <a href="/dashboard.html" style="display:inline-block; text-decoration:none; padding:12px 14px; border-radius:12px; background:#274369; color:#fff; font-weight:700;">← На dashboard</a>
+        <a href="/" style="display:inline-block; text-decoration:none; padding:12px 14px; border-radius:12px; background:#22375c; color:#fff; font-weight:700;">На сайт</a>
+      </div>
+      <div class="msg" id="msg"></div>
+      <div class="muted" style="margin-top: 18px; font-size: 14px;">
+        Для локального запуска по умолчанию: <b>admin</b> / <b>admin123!</b>.<br>
+        Для продакшена обязательно задайте <code>ADMIN_LOGIN</code> и <code>ADMIN_PASSWORD</code> или <code>ADMIN_PASSWORD_HASH</code>.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+    const form = document.getElementById('loginForm');
+    const msg = document.getElementById('msg');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      msg.textContent = '';
+
+      const payload = {
+        login: document.getElementById('login').value.trim(),
+        password: document.getElementById('password').value
+      };
+
+      const response = await fetch('/login/admin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        window.location.href = data.redirect || '/admin';
+        return;
+      }
+
+      msg.textContent = data.message || data.error || 'Ошибка входа';
+    });
+  </script>
+</body>
+</html>

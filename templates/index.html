@@ -4,98 +4,40 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Вход в систему</title>
-    <style>
-        :root {
-            --primary: #2b78e4;
-            --bg: #f4f7f9;
-            --card-bg: #ffffff;
-            --text: #1e293b;
-            --text-secondary: #64748b;
-            --border: #f1f5f9;
-            --input-bg: #ffffff;
-            --btn-student: #1976d2;
-            --btn-uni: #1976d2;
-            --btn-submit: #1976d2;
-            --error-bg: #fee2e2;
-            --error-text: #ef4444;
-            --hotkey-bg: #f1f5f9;
-        }
-        
-        body.dark {
-            --primary: #3b82f6;
-            --bg: #0f172a;
-            --card-bg: #1e293b;
-            --text: #f1f5f9;
-            --text-secondary: #94a3b8;
-            --border: #334155;
-            --input-bg: #334155;
-            --btn-student: #3b82f6;
-            --btn-uni: #3b82f6;
-            --btn-submit: #3b82f6;
-            --error-bg: #7f1d1d;
-            --error-text: #fca5a5;
-            --hotkey-bg: #334155;
-        }
-        
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease; }
-        body { background: var(--bg); color: var(--text); display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .card { background: var(--card-bg); padding: 40px; border-radius: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); text-align: center; width: 100%; max-width: 350px; position: relative; border: 1px solid var(--border); }
-        .close-btn { position: absolute; top: 15px; right: 15px; text-decoration: none; color: var(--text-secondary); font-size: 28px; transition: 0.2s; cursor: pointer; line-height: 1; }
-        .close-btn:hover { color: #ef4444; transform: scale(1.1); }
-        .theme-toggle {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            background: var(--hotkey-bg);
-            border: none;
-            cursor: pointer;
-            padding: 8px 12px;
-            border-radius: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: 0.2s;
-        }
-        .theme-toggle img {
-            width: 20px;
-            height: 20px;
-        }
-        .theme-toggle:hover { transform: scale(1.05); opacity: 0.9; }
-        h1 { color: var(--primary); font-size: 28px; margin-bottom: 30px; }
-        .btn-list, .form-container { display: flex; flex-direction: column; gap: 12px; }
-        .hidden { display: none; }
-        .btn { display: block; padding: 14px; border-radius: 12px; text-decoration: none; color: white; font-weight: 600; transition: 0.2s; border: none; cursor: pointer; font-size: 16px; }
-        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
-        .student { background-color: var(--btn-student); }
-        .uni { background-color: var(--btn-uni); }
-        .submit { background-color: var(--btn-submit); margin-top: 10px; }
-        input { padding: 14px; border: 2px solid var(--border); border-radius: 12px; font-size: 14px; outline: none; width: 100%; box-sizing: border-box; background: var(--input-bg); color: var(--text); }
-        input:focus { border-color: var(--primary); }
-        input::placeholder { color: var(--text-secondary); }
-        .back-link { display: inline-block; margin-top: 20px; color: var(--text-secondary); text-decoration: none; font-size: 13px; cursor: pointer; }
-        .hint { color: var(--text-secondary); font-size: 14px; margin-top: 15px; }
-        .error-msg { background: var(--error-bg); color: var(--error-text); font-size: 13px; margin-top: 10px; padding: 8px; border-radius: 8px; display: none; }
-        .error-msg.show { display: block; }
-        .hotkey-hint { margin-top: 15px; font-size: 11px; color: var(--text-secondary); border-top: 1px solid var(--border); padding-top: 12px; }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
 </head>
 <body>
     <div class="card">
         <button class="theme-toggle" onclick="toggleTheme()">
             <img src="/static/png/moon.png" alt="Тёмная тема" id="themeIcon">
         </button>
+
         <a href="/" class="close-btn">&times;</a>
+
         <div id="main-menu">
             <h1>Войти</h1>
+
             <div class="btn-list">
-                <button class="btn student" id="student-btn" onclick="showForm('student-form')">Как студент</button>
-                <button class="btn uni" id="uni-btn" onclick="showForm('uni-form')">Как ВУЗ</button>
+                <button class="btn student" id="student-btn" onclick="showForm('student-form')">
+                    Как студент
+                </button>
+
+                <button class="btn uni" id="uni-btn" onclick="showForm('uni-form')">
+                    Как ВУЗ
+                </button>
+
+                <a href="/admin/login" class="btn admin">
+                    В админ-панель
+                </a>
             </div>
+
             <p class="hint">Выберите роль для входа</p>
+
             <div class="hotkey-hint">
                 ⎋ Esc: вернуться на главную
             </div>
         </div>
+
         <div id="student-form" class="hidden">
             <h1>Студент</h1>
             <div class="form-container">
@@ -109,6 +51,7 @@
                 ⏎ Enter: переход к следующему полю / вход | ⌫ Backspace: в пустом поле - назад | ⎋ Esc: назад
             </div>
         </div>
+
         <div id="uni-form" class="hidden">
             <h1>ВУЗ</h1>
             <div class="form-container">
@@ -123,8 +66,8 @@
             </div>
         </div>
     </div>
+
     <script>
-        // Тема с картинками
         function toggleTheme() {
             document.body.classList.toggle('dark');
             const themeIcon = document.getElementById('themeIcon');
@@ -138,7 +81,7 @@
                 localStorage.setItem('theme', 'light');
             }
         }
-        
+
         function loadTheme() {
             const savedTheme = localStorage.getItem('theme');
             const themeIcon = document.getElementById('themeIcon');
@@ -152,23 +95,21 @@
                 themeIcon.alt = 'Тёмная тема';
             }
         }
-        
-        // DOM элементы для студента
+
         const studentDiploma = document.getElementById('student-diploma');
         const studentSecretInput = document.getElementById('student-secret');
         const studentError = document.getElementById('student-error');
-        
-        // DOM элементы для ВУЗа
+
         const uniLogin = document.getElementById('uni-login');
         const uniPassword = document.getElementById('uni-password');
         const uniError = document.getElementById('uni-error');
-        
-        function showForm(id) { 
-            document.getElementById('main-menu').classList.add('hidden'); 
+
+        function showForm(id) {
+            document.getElementById('main-menu').classList.add('hidden');
             document.getElementById(id).classList.remove('hidden');
-            // Скрываем ошибки при открытии формы
             studentError.classList.remove('show');
             uniError.classList.remove('show');
+
             if (id === 'student-form') {
                 setTimeout(() => studentDiploma.focus(), 100);
             }
@@ -176,18 +117,18 @@
                 setTimeout(() => uniLogin.focus(), 100);
             }
         }
-        
-        function showMain() { 
-            document.getElementById('student-form').classList.add('hidden'); 
-            document.getElementById('uni-form').classList.add('hidden'); 
-            document.getElementById('main-menu').classList.remove('hidden'); 
+
+        function showMain() {
+            document.getElementById('student-form').classList.add('hidden');
+            document.getElementById('uni-form').classList.add('hidden');
+            document.getElementById('main-menu').classList.remove('hidden');
             studentError.classList.remove('show');
             uniError.classList.remove('show');
         }
-        
+
         function loginStudent() {
-            var diploma = studentDiploma.value.trim();
-            var studentSecret = studentSecretInput.value.trim();
+            const diploma = studentDiploma.value.trim();
+            const studentSecret = studentSecretInput.value.trim();
 
             studentError.classList.remove('show');
 
@@ -204,8 +145,8 @@
                     'X-CSRF-Token': '{{ csrf_token }}'
                 },
                 body: JSON.stringify({
-                   diploma_number: diploma,
-                   student_secret: studentSecret
+                    diploma_number: diploma,
+                    student_secret: studentSecret
                 })
             })
             .then(response => response.json())
@@ -218,27 +159,26 @@
                 }
             });
         }
-        
+
         function loginUniversity() {
-            var login = uniLogin.value.trim();
-            var password = uniPassword.value;
-            
-            // Скрываем предыдущую ошибку
+            const login = uniLogin.value.trim();
+            const password = uniPassword.value;
+
             uniError.classList.remove('show');
-            
+
             if (!login || !password) {
                 uniError.innerHTML = 'Заполните все поля';
                 uniError.classList.add('show');
                 return;
             }
-            
+
             fetch('/login/university', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-Token': '{{ csrf_token }}'
                 },
-                body: JSON.stringify({login: login, password: password})
+                body: JSON.stringify({ login: login, password: password })
             })
             .then(response => response.json())
             .then(data => {
@@ -250,8 +190,7 @@
                 }
             });
         }
-        
-        // Горячие клавиши для формы студента
+
         studentDiploma.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -279,8 +218,7 @@
                 studentDiploma.focus();
             }
         });
-        
-        // Горячие клавиши для формы ВУЗа
+
         uniLogin.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -292,7 +230,7 @@
                 showMain();
             }
         });
-        
+
         uniPassword.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -308,8 +246,7 @@
                 uniLogin.focus();
             }
         });
-        
-        // Глобальный обработчик для Esc на главном меню
+
         document.addEventListener('keydown', function(e) {
             const mainMenu = document.getElementById('main-menu');
             if (e.key === 'Escape' && !mainMenu.classList.contains('hidden')) {
@@ -317,7 +254,7 @@
                 window.location.href = '/';
             }
         });
-        
+
         loadTheme();
     </script>
 </body>

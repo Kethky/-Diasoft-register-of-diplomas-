@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>Админ-панель</title>
+      <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+
+</head>
+<body>
+  <div class="topbar">
+    <div>
+      <div class="brand">Админ-панель</div>
+      <div class="sub">Управление ВУЗами, паролями студентов и журналами безопасности</div>
+    </div>
+    <div class="actions">
+      <a class="btn secondary" href="/">На сайт</a>
+      <a class="btn" href="/logout">Выйти</a>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="grid">
+      <section class="card">
+        <h2>Доступ студентов</h2>
+        <p>Пароли студентов в базе хранятся только в виде хэшей. В колонке «Пароль» показывается либо новый пароль после выдачи/перевыпуска, либо безопасная заглушка.</p>
+
+        <div class="controls">
+          <input id="searchInput" placeholder="Поиск по ВУЗу, ФИО или номеру диплома">
+          <select id="sortBy">
+            <option value="university_name">Сортировка: ВУЗ</option>
+            <option value="full_name">Сортировка: ФИО</option>
+            <option value="diploma_number">Сортировка: Номер диплома</option>
+          </select>
+          <select id="sortDir">
+            <option value="asc">По возрастанию</option>
+            <option value="desc">По убыванию</option>
+          </select>
+          <button id="reloadRowsBtn" class="btn secondary">Обновить</button>
+          <button id="generateMissingBtn">Выдать пароли</button>
+        </div>
+
+        <div class="hint">Кнопка «Выдать пароли» генерирует доступ только тем дипломам, у которых кода ещё нет. После выдачи можно скачать CSV с новыми паролями.</div>
+        <div class="flash" id="studentFlash"></div>
+
+        <div style="overflow:auto; margin-top:14px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Название ВУЗа</th>
+                <th>ФИО</th>
+                <th>Номер диплома</th>
+                <th>Пароль</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody id="studentTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Управление ВУЗами</h2>
+        <p>Добавление и удаление ВУЗов из интерфейса сайта.</p>
+        <div class="controls" style="grid-template-columns: 1fr auto;">
+          <input id="universityName" placeholder="Полное название ВУЗа">
+          <button id="addUniversityBtn">Добавить ВУЗ</button>
+        </div>
+        <div class="flash" id="universityFlash"></div>
+        <div style="overflow:auto; margin-top:14px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Код</th>
+                <th>Название</th>
+                <th>Логин</th>
+                <th>Пароль</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody id="universityTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Логи безопасности</h2>
+        <p>Последние записи из security_logs.</p>
+        <div class="actions" style="margin-bottom:12px;">
+          <button id="loadSecurityLogsBtn" class="btn secondary">Загрузить</button>
+          <button id="clearSecurityLogsBtn" class="btn danger">Очистить</button>
+        </div>
+        <div class="panel-list" id="securityLogs"></div>
+      </section>
+
+      <section class="card">
+        <h2>Логи проверок дипломов</h2>
+        <p>Последние записи verification_logs.</p>
+        <div class="actions" style="margin-bottom:12px;">
+          <button id="loadVerificationLogsBtn" class="btn secondary">Загрузить</button>
+          <button id="clearVerificationLogsBtn" class="btn danger">Очистить</button>
+        </div>
+        <div class="panel-list" id="verificationLogs"></div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>Подозрительные сообщения</h2>
+      <p>Содержимое suspicious_reports.log.</p>
+      <div class="actions" style="margin-bottom:12px;"><button id="loadSuspiciousBtn" class="btn secondary">Загрузить</button></div>
+      <div class="panel-list" id="suspiciousReports"></div>
+    </section>
+  </div>
+
+  <script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+    const studentTableBody = document.getElementById('studentTableBody');
+    const universityTableBody = document.getElementById('universityTableBody');
+    const studentFlash = document.getElementById('studentFlash');
+    const universityFlash = document.getElementById('universityFlash');
+    const issuedStudentSecrets = new Map();
+    const issuedUniversityPasswords = new Map();
+
+    async function api(url, options = {}) {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken,
+          ...(options.headers || {})
+        }
+      });
+      const contentType = response.headers.get('content-type') || '';
+      const data = contentType.includes('application/json') ? await response.json() : await response.text();
+      if (!response.ok) {
+        const message = data?.message || data?.error || 'Ошибка запроса';
+        throw new Error(message);
+      }
+      return data;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function studentPasswordCellText(row) {
+      if (issuedStudentSecrets.has(row.id)) {
+        return `<span class="badge success">${escapeHtml(issuedStudentSecrets.get(row.id))}</span>`;
+      }
+      if (row.has_password) {
+        return '<span class="badge">Скрыт (хэш)</span>';
+      }
+      return '<span class="badge warn">Не выдан</span>';
+    }
+
+    function universityPasswordCell(row) {
+      if (issuedUniversityPasswords.has(row.university_code)) {
+        return `<span class="badge success">${escapeHtml(issuedUniversityPasswords.get(row.university_code))}</span>`;
+      }
+      return '<span class="badge">Скрыт (хэш)</span>';
+    }
+
+    function renderStudentRows(items) {
+      if (!items || items.length === 0) {
+        studentTableBody.innerHTML = `
+          <tr>
+            <td colspan="5" style="text-align:center; color:#94a3b8; padding:18px;">
+              Нет записей для отображения
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      studentTableBody.innerHTML = items.map(row => `
+        <tr>
+          <td>${escapeHtml(row.university_name)}</td>
+          <td>${escapeHtml(row.full_name)}</td>
+          <td>${escapeHtml(row.diploma_number)}</td>
+          <td>${studentPasswordCellText(row)}</td>
+          <td>
+            <div class="actions">
+              <button class="btn secondary" onclick="resetStudentSecret(${row.id})">Пересоздать пароль</button>
+              <button class="btn danger" onclick="clearStudentSecret(${row.id}, '${escapeHtml(row.full_name)}')">Удалить пароль</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function loadStudentRows() {
+      const params = new URLSearchParams({
+        sort_by: document.getElementById('sortBy').value,
+        sort_dir: document.getElementById('sortDir').value,
+        search: document.getElementById('searchInput').value.trim()
+      });
+      const data = await api(`/api/admin/student-secrets?${params.toString()}`);
+      window.__studentRows = data.items || [];
+      renderStudentRows(data.items || []);
+    }
+
+    async function loadUniversities() {
+      const data = await api('/api/admin/universities');
+      universityTableBody.innerHTML = (data.items || []).map(row => `
+        <tr>
+          <td>${escapeHtml(row.university_code)}</td>
+          <td>${escapeHtml(row.name)}</td>
+          <td>${escapeHtml(row.login)}</td>
+          <td>${universityPasswordCell(row)}</td>
+          <td>
+            <div class="actions">
+              <button class="btn secondary" onclick="resetUniversityPassword(${row.university_code}, '${escapeHtml(row.name)}')">Пересоздать пароль</button>
+              <button class="btn danger" onclick="deleteUniversity(${row.university_code}, '${escapeHtml(row.name)}')">Удалить</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function addUniversity() {
+      const nameInput = document.getElementById('universityName');
+      const name = nameInput.value.trim();
+      if (!name) {
+        universityFlash.textContent = 'Введите название ВУЗа';
+        return;
+      }
+      try {
+        const data = await api('/api/admin/universities', {
+          method: 'POST',
+          body: JSON.stringify({ name })
+        });
+        const item = data.item;
+        universityFlash.innerHTML = `<span class="good">ВУЗ добавлен. Логин: <b>${escapeHtml(item.login)}</b>, пароль: <b>${escapeHtml(item.password)}</b></span>`;
+        nameInput.value = '';
+        await loadUniversities();
+      } catch (error) {
+        universityFlash.textContent = error.message;
+      }
+    }
+
+    async function deleteUniversity(universityCode, universityName) {
+      if (!confirm(`Удалить ВУЗ «${universityName}» и все его дипломы?`)) return;
+      try {
+        await api(`/api/admin/universities/${universityCode}`, { method: 'DELETE' });
+        universityFlash.innerHTML = `<span class="good">ВУЗ удалён: ${escapeHtml(universityName)}</span>`;
+        await loadUniversities();
+        await loadStudentRows();
+      } catch (error) {
+        universityFlash.textContent = error.message;
+      }
+    }
+
+    async function resetStudentSecret(diplomaId) {
+      try {
+        const data = await api(`/api/admin/student-secrets/${diplomaId}/reset`, { method: 'POST' });
+        issuedStudentSecrets.set(diplomaId, data.item.student_secret);
+        studentFlash.innerHTML = `<span class="good">Новый пароль создан для ${escapeHtml(data.item.full_name)}: <b>${escapeHtml(data.item.student_secret)}</b></span>`;
+        await loadStudentRows();
+      } catch (error) {
+        studentFlash.textContent = error.message;
+      }
+    }
+
+    async function clearStudentSecret(diplomaId, fullName) {
+      if (!confirm(`Удалить пароль для «${fullName}»? После этого вход студента будет невозможен, пока пароль не создадут заново.`)) return;
+      try {
+        await api(`/api/admin/student-secrets/${diplomaId}/clear`, { method: 'POST' });
+        issuedStudentSecrets.delete(diplomaId);
+        studentFlash.innerHTML = `<span class="good">Пароль удалён для ${escapeHtml(fullName)}. Теперь его можно выдать заново или пересоздать.</span>`;
+        await loadStudentRows();
+      } catch (error) {
+        studentFlash.textContent = error.message;
+      }
+    }
+
+    async function resetUniversityPassword(universityCode, universityName) {
+      try {
+        const data = await api(`/api/admin/universities/${universityCode}/reset-password`, {
+          method: 'POST'
+        });
+        issuedUniversityPasswords.set(universityCode, data.item.password);
+        universityFlash.innerHTML = `<span class="good">Новый пароль для ${escapeHtml(universityName)}: <b>${escapeHtml(data.item.password)}</b></span>`;
+        await loadUniversities();
+      } catch (error) {
+        universityFlash.textContent = error.message;
+      }
+    }
+
+    function downloadCsvFromItems(items) {
+      const rows = [['ВУЗ', 'ФИО', 'Номер диплома', 'Пароль']];
+      items.forEach(item => rows.push([item.university_name, item.full_name, item.diploma_number, item.student_secret]));
+      const csv = rows.map(row => row.map(value => `"${String(value ?? '').replaceAll('"', '""')}"`).join(';')).join('\n');
+      const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'student_passwords.csv';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
+    async function generateMissingSecrets() {
+      try {
+        const data = await api('/api/admin/student-secrets/generate', { method: 'POST' });
+        (data.items || []).forEach(item => issuedStudentSecrets.set(item.id, item.student_secret));
+        await loadStudentRows();
+        if ((data.items || []).length > 0) {
+          studentFlash.innerHTML = `<span class="good">Сгенерировано паролей: ${data.count}</span>`;
+          downloadCsvFromItems(data.items);
+        } else {
+          studentFlash.innerHTML = '<span class="good">Все пароли уже были выданы ранее.</span>';
+        }
+      } catch (error) {
+        studentFlash.textContent = error.message;
+      }
+    }
+
+    function renderLogItems(containerId, items) {
+      const container = document.getElementById(containerId);
+      if (!items || items.length === 0) {
+        container.innerHTML = '<div class="log-item">Нет данных</div>';
+        return;
+      }
+      container.innerHTML = items.map(item => {
+        if (typeof item === 'string') return `<div class="log-item">${escapeHtml(item)}</div>`;
+        return `<div class="log-item">${Object.entries(item).map(([key, value]) => `<div><b>${escapeHtml(key)}:</b> ${escapeHtml(value)}</div>`).join('')}</div>`;
+      }).join('');
+    }
+
+    async function loadSecurityLogs() {
+      const data = await api('/api/admin/logs/security?limit=50');
+      renderLogItems('securityLogs', data.items || []);
+    }
+
+    async function loadVerificationLogs() {
+      const data = await api('/api/admin/logs/verification?limit=50');
+      renderLogItems('verificationLogs', data.items || []);
+    }
+
+    async function clearSecurityLogs() {
+      if (!confirm('Очистить все логи безопасности?')) return;
+      try {
+        const data = await api('/api/admin/logs/security/clear', { method: 'POST' });
+        renderLogItems('securityLogs', []);
+        studentFlash.innerHTML = `<span class="good">${escapeHtml(data.message)}${data.deleted_count !== undefined ? ` (${data.deleted_count})` : ''}</span>`;
+      } catch (error) {
+        studentFlash.textContent = error.message;
+      }
+    }
+
+    async function clearVerificationLogs() {
+      if (!confirm('Очистить все логи проверок дипломов?')) return;
+      try {
+        const data = await api('/api/admin/logs/verification/clear', { method: 'POST' });
+        renderLogItems('verificationLogs', []);
+        studentFlash.innerHTML = `<span class="good">${escapeHtml(data.message)}${data.deleted_count !== undefined ? ` (${data.deleted_count})` : ''}</span>`;
+      } catch (error) {
+        studentFlash.textContent = error.message;
+      }
+    }
+
+
+    async function loadSuspiciousReports() {
+      const data = await api('/api/admin/reports/suspicious?limit=50');
+      renderLogItems('suspiciousReports', data.items || []);
+    }
+
+    document.getElementById('reloadRowsBtn').addEventListener('click', loadStudentRows);
+    document.getElementById('generateMissingBtn').addEventListener('click', generateMissingSecrets);
+    document.getElementById('addUniversityBtn').addEventListener('click', addUniversity);
+    document.getElementById('loadSecurityLogsBtn').addEventListener('click', loadSecurityLogs);
+    document.getElementById('clearSecurityLogsBtn').addEventListener('click', clearSecurityLogs);
+    document.getElementById('loadVerificationLogsBtn').addEventListener('click', loadVerificationLogs);
+    document.getElementById('clearVerificationLogsBtn').addEventListener('click', clearVerificationLogs);
+    document.getElementById('loadSuspiciousBtn').addEventListener('click', loadSuspiciousReports);
+    document.getElementById('sortBy').addEventListener('change', loadStudentRows);
+    document.getElementById('sortDir').addEventListener('change', loadStudentRows);
+    document.getElementById('searchInput').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') loadStudentRows();
+    });
+
+    window.resetStudentSecret = resetStudentSecret;
+    window.clearStudentSecret = clearStudentSecret;
+    window.deleteUniversity = deleteUniversity;
+    window.resetUniversityPassword = resetUniversityPassword;
+
+    Promise.all([loadStudentRows(), loadUniversities(), loadSecurityLogs(), loadVerificationLogs(), loadSuspiciousReports()]).catch(error => {
+      studentFlash.textContent = error.message;
+    });
+  </script>
+</body>
+</html>

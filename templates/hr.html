@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>HR-проверка дипломов</title>
+      <link rel="stylesheet" href="{{ url_for('static', filename='css/hr.css') }}">
+
+</head>
+<body>
+  <div class="topbar">
+    <div>
+      <div class="brand">HR-проверка дипломов</div>
+      <div class="sub">Быстрая и расширенная проверка, пакетная проверка, извлечение реквизитов и история.</div>
+    </div>
+    <div class="actions">
+      <a class="btn secondary" href="/dashboard.html">На dashboard</a>
+      <a class="btn secondary" href="/">На сайт</a>
+    </div>
+  </div>
+
+  <div class="layout">
+    <section class="card">
+      <h2>Доступ HR</h2>
+      <p>Укажите HR API key. Браузер запомнит его локально для этой страницы.</p>
+      <div class="controls two">
+        <input id="apiKey" placeholder="HR API key">
+        <button class="secondary" id="saveApiKeyBtn">Сохранить ключ</button>
+      </div>
+      <div class="hint">Поддерживаются быстрый и расширенный режимы проверки.</div>
+      <div class="flash" id="hrFlash"></div>
+    </section>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Проверка диплома</h2>
+        <div class="mode-switch">
+          <button class="mode-btn active" id="quickModeBtn" type="button">Быстрая проверка</button>
+          <button class="mode-btn" id="extendedModeBtn" type="button">Расширенная проверка</button>
+        </div>
+
+        <div class="controls two">
+          <input id="universityCode" placeholder="Код ВУЗа">
+          <input id="diplomaNumber" placeholder="Номер диплома">
+        </div>
+
+        <div id="extendedFields" class="hidden">
+          <div class="controls three" style="margin-top:12px;">
+            <input id="fullName" placeholder="ФИО">
+            <input id="graduationYear" placeholder="Год выпуска">
+            <input id="specialty" placeholder="Специальность">
+          </div>
+        </div>
+
+        <div class="actions" style="margin-top:14px;">
+          <button id="verifyBtn" type="button">Проверить</button>
+          <button id="downloadResultPdfBtn" class="secondary" type="button">Скачать PDF</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>PDF / скан диплома</h2>
+        <p>Загрузите PDF или изображение диплома. Система попытается извлечь реквизиты и подставить их в расширенную форму.</p>
+        <div class="controls">
+          <input id="documentFile" type="file" accept=".pdf,.png,.jpg,.jpeg,.bmp,.tiff,.webp">
+          <button id="extractBtn" type="button">Извлечь реквизиты</button>
+        </div>
+        <div class="flash" id="extractFlash"></div>
+        <pre id="extractPreview">Нет данных</pre>
+      </section>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Массовая проверка через CSV/XLSX</h2>
+        <p>Ожидаемые колонки: <span class="mono">university_code, diploma_number, full_name, graduation_year, specialty</span>. Достаточно первых двух, остальное — для расширенной сверки.</p>
+        <div class="controls">
+          <input id="batchFile" type="file" accept=".csv,.xlsx,.xls">
+          <div class="actions">
+            <button id="batchVerifyBtn" type="button">Проверить файл</button>
+            <button id="downloadBatchCsvBtn" class="secondary" type="button">Скачать результаты CSV</button>
+          </div>
+        </div>
+        <div class="flash" id="batchFlash"></div>
+        <div class="result-grid" style="margin-top:14px;">
+          <div class="result-item"><div class="result-label">Всего</div><div id="batchTotal">0</div></div>
+          <div class="result-item"><div class="result-label">Подтверждено</div><div id="batchValid">0</div></div>
+          <div class="result-item"><div class="result-label">Расхождения</div><div id="batchDiscrepancy">0</div></div>
+          <div class="result-item"><div class="result-label">Не найдено / аннулировано</div><div id="batchProblem">0</div></div>
+        </div>
+        <div style="overflow:auto; margin-top:14px; max-height:380px;">
+          <table class="batch-table">
+            <thead>
+              <tr>
+                <th>ВУЗ</th>
+                <th>Диплом</th>
+                <th>Статус</th>
+                <th>Доверие</th>
+                <th>Комментарий</th>
+              </tr>
+            </thead>
+            <tbody id="batchTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Результат проверки</h2>
+        <div class="result-box" id="resultBox">
+          <div class="hint">Пока нет результата. Выполните проверку вручную или загрузите файл.</div>
+        </div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>История последних проверок HR</h2>
+      <p>Фильтры по ВУЗу, дате и статусу. История сохраняется для текущей сессии браузера.</p>
+      <div class="controls" style="grid-template-columns:1fr 1fr 1fr 1fr auto;">
+        <input id="historyUniversityCode" placeholder="Код ВУЗа">
+        <select id="historyStatus">
+          <option value="">Все статусы</option>
+          <option value="valid">Подтверждено</option>
+          <option value="discrepancy">Есть расхождения</option>
+          <option value="invalid">Аннулирован</option>
+          <option value="not_found">Не найден</option>
+          <option value="error">Ошибка</option>
+        </select>
+        <input id="historyDateFrom" type="date">
+        <input id="historyDateTo" type="date">
+        <button id="loadHistoryBtn" class="secondary" type="button">Обновить</button>
+      </div>
+      <div style="overflow:auto; margin-top:14px;">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Дата</th>
+              <th>Режим</th>
+              <th>ВУЗ</th>
+              <th>Диплом</th>
+              <th>Статус</th>
+              <th>Доверие</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody id="historyTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+    const hrFlash = document.getElementById('hrFlash');
+    const resultBox = document.getElementById('resultBox');
+    const batchTableBody = document.getElementById('batchTableBody');
+    const historyTableBody = document.getElementById('historyTableBody');
+    const extractPreview = document.getElementById('extractPreview');
+    let verificationMode = 'quick';
+    let currentResult = null;
+    let currentBatchResults = [];
+    let currentHistoryItems = [];
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function getApiKey() {
+      return document.getElementById('apiKey').value.trim();
+    }
+
+    async function api(url, options = {}) {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          ...(options.headers || {}),
+          'X-CSRF-Token': csrfToken
+        }
+      });
+      const contentType = response.headers.get('content-type') || '';
+      const data = contentType.includes('application/json') ? await response.json() : await response.blob();
+      if (!response.ok) {
+        throw new Error(data?.message || data?.error || 'Ошибка запроса');
+      }
+      return data;
+    }
+
+    function setMode(mode) {
+      verificationMode = mode;
+      document.getElementById('extendedFields').classList.toggle('hidden', mode !== 'extended');
+      document.getElementById('quickModeBtn').classList.toggle('active', mode === 'quick');
+      document.getElementById('extendedModeBtn').classList.toggle('active', mode === 'extended');
+    }
+
+    function collectManualPayload() {
+      return {
+        api_key: getApiKey(),
+        verification_mode: verificationMode,
+        university_code: document.getElementById('universityCode').value.trim(),
+        diploma_number: document.getElementById('diplomaNumber').value.trim(),
+        full_name: document.getElementById('fullName').value.trim(),
+        graduation_year: document.getElementById('graduationYear').value.trim(),
+        specialty: document.getElementById('specialty').value.trim(),
+      };
+    }
+
+    function badgeClass(state) {
+      if (state === 'success') return 'badge success';
+      if (state === 'warn') return 'badge warn';
+      if (state === 'danger') return 'badge danger';
+      return 'badge neutral';
+    }
+
+    function renderResult(result) {
+      currentResult = result;
+      const statusClass = result.status === 'valid' ? 'success' : result.status === 'discrepancy' ? 'warn' : 'danger';
+      const requested = result.requested || {};
+      const matched = result.matched || {};
+      resultBox.innerHTML = `
+        <div class="actions">
+          <span class="badge ${statusClass}">${escapeHtml(result.message || result.status)}</span>
+          <span class="badge ${result.trust_level === 'high' ? 'success' : result.trust_level === 'medium' ? 'warn' : 'danger'}">${escapeHtml(result.trust_label || '')}</span>
+        </div>
+        <div class="indicator-list">
+          ${(result.indicators || []).map(item => `<span class="${badgeClass(item.state)}">${escapeHtml(item.label)}</span>`).join('')}
+        </div>
+        <div class="result-grid">
+          <div class="result-item"><div class="result-label">ВУЗ</div><div>${escapeHtml(result.university_name || result.university_code || '—')}</div></div>
+          <div class="result-item"><div class="result-label">Номер диплома</div><div>${escapeHtml(result.diploma_number || '—')}</div></div>
+          <div class="result-item"><div class="result-label">ФИО: введено</div><div>${escapeHtml(requested.full_name || '—')}</div></div>
+          <div class="result-item"><div class="result-label">ФИО: реестр</div><div>${escapeHtml(matched.full_name || '—')}</div></div>
+          <div class="result-item"><div class="result-label">Год: введено</div><div>${escapeHtml(requested.graduation_year || '—')}</div></div>
+          <div class="result-item"><div class="result-label">Год: реестр</div><div>${escapeHtml(matched.graduation_year || '—')}</div></div>
+          <div class="result-item"><div class="result-label">Специальность: введено</div><div>${escapeHtml(requested.specialty || '—')}</div></div>
+          <div class="result-item"><div class="result-label">Специальность: реестр</div><div>${escapeHtml(matched.specialty || '—')}</div></div>
+        </div>
+        <div class="hint">Подпись: ${escapeHtml(result.signature_label || '—')} • Проверено: ${escapeHtml(result.verified_at || '')}</div>
+      `;
+    }
+
+    async function verifyManual() {
+      try {
+        const payload = collectManualPayload();
+        const data = await api('/api/verify_diploma_for_hr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        renderResult(data);
+        hrFlash.innerHTML = '<span class="good">Проверка выполнена</span>';
+        await loadHistory();
+      } catch (error) {
+        hrFlash.textContent = error.message;
+      }
+    }
+
+    async function extractDocument() {
+      const file = document.getElementById('documentFile').files[0];
+      if (!file) {
+        document.getElementById('extractFlash').textContent = 'Выберите PDF или изображение';
+        return;
+      }
+      const formData = new FormData();
+      formData.append('api_key', getApiKey());
+      formData.append('file', file);
+      try {
+        const data = await api('/api/hr/extract-document', { method: 'POST', body: formData });
+        const item = data.item || {};
+        if (item.university_code) document.getElementById('universityCode').value = item.university_code;
+        if (item.diploma_number) document.getElementById('diplomaNumber').value = item.diploma_number;
+        if (item.full_name) document.getElementById('fullName').value = item.full_name;
+        if (item.graduation_year) document.getElementById('graduationYear').value = item.graduation_year;
+        if (item.specialty) document.getElementById('specialty').value = item.specialty;
+        setMode('extended');
+        extractPreview.textContent = JSON.stringify(item, null, 2);
+        document.getElementById('extractFlash').innerHTML = '<span class="good">Реквизиты извлечены и подставлены в форму</span>';
+      } catch (error) {
+        document.getElementById('extractFlash').textContent = error.message;
+      }
+    }
+
+    function renderBatchResults(result) {
+      currentBatchResults = result.results || [];
+      document.getElementById('batchTotal').textContent = result.total || 0;
+      document.getElementById('batchValid').textContent = result.valid_count || 0;
+      document.getElementById('batchDiscrepancy').textContent = result.discrepancy_count || 0;
+      document.getElementById('batchProblem').textContent = (result.invalid_count || 0) + (result.not_found_count || 0);
+      if (!currentBatchResults.length) {
+        batchTableBody.innerHTML = '<tr><td colspan="5" class="hint">Нет результатов</td></tr>';
+        return;
+      }
+      batchTableBody.innerHTML = currentBatchResults.map(row => `
+        <tr>
+          <td>${escapeHtml(row.university_name || row.university_code || '—')}</td>
+          <td>${escapeHtml(row.diploma_number || '—')}</td>
+          <td>${escapeHtml(row.status_label || row.message || row.status)}</td>
+          <td>${escapeHtml(row.trust_label || '—')}</td>
+          <td>${escapeHtml(row.comment || (row.indicators || []).map(i => i.label).join(', '))}</td>
+        </tr>
+      `).join('');
+    }
+
+    async function verifyBatchFile() {
+      const file = document.getElementById('batchFile').files[0];
+      if (!file) {
+        document.getElementById('batchFlash').textContent = 'Выберите CSV/XLSX файл';
+        return;
+      }
+      const formData = new FormData();
+      formData.append('api_key', getApiKey());
+      formData.append('verification_mode', verificationMode);
+      formData.append('file', file);
+      try {
+        const data = await api('/api/hr/batch-verify-upload', { method: 'POST', body: formData });
+        renderBatchResults(data);
+        document.getElementById('batchFlash').innerHTML = `<span class="good">Файл проверен. Всего строк: ${data.total || 0}</span>`;
+        await loadHistory();
+      } catch (error) {
+        document.getElementById('batchFlash').textContent = error.message;
+      }
+    }
+
+    function downloadBatchCsv() {
+      if (!currentBatchResults.length) {
+        document.getElementById('batchFlash').textContent = 'Нет результатов для выгрузки';
+        return;
+      }
+      const rows = [['ВУЗ', 'Номер диплома', 'Статус', 'Доверие', 'Комментарий']];
+      currentBatchResults.forEach(item => rows.push([
+        item.university_name || item.university_code || '',
+        item.diploma_number || '',
+        item.status_label || item.message || item.status || '',
+        item.trust_label || '',
+        item.comment || (item.indicators || []).map(x => x.label).join(', ')
+      ]));
+      const csv = rows.map(row => row.map(value => `"${String(value ?? '').replaceAll('"', '""')}"`).join(';')).join('\n');
+      const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'hr_batch_results.csv';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
+    async function downloadResultPdf(result = currentResult) {
+      if (!result) {
+        hrFlash.textContent = 'Сначала выполните проверку';
+        return;
+      }
+      const response = await fetch('/api/hr/result-pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
+        },
+        body: JSON.stringify({ result })
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        hrFlash.textContent = data.message || data.error || 'Не удалось скачать PDF';
+        return;
+      }
+      const blob = await response.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'hr_verification_result.pdf';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
+    function renderHistory(items) {
+      currentHistoryItems = items || [];
+      if (!currentHistoryItems.length) {
+        historyTableBody.innerHTML = '<tr><td colspan="7" class="hint">История пока пуста</td></tr>';
+        return;
+      }
+      historyTableBody.innerHTML = currentHistoryItems.map(item => `
+        <tr>
+          <td>${escapeHtml(item.created_at || '')}</td>
+          <td>${escapeHtml(item.verification_mode === 'quick' ? 'Быстрая' : 'Расширенная')}</td>
+          <td>${escapeHtml(item.university_name || item.university_code || '—')}</td>
+          <td>${escapeHtml(item.diploma_number || '—')}</td>
+          <td>${escapeHtml(item.status || '')}</td>
+          <td>${escapeHtml(item.trust_label || '')}</td>
+          <td><button class="secondary" type="button" onclick="downloadHistoryPdf(${item.id})">PDF</button></td>
+        </tr>
+      `).join('');
+    }
+
+    async function loadHistory() {
+      const params = new URLSearchParams({
+        university_code: document.getElementById('historyUniversityCode').value.trim(),
+        status: document.getElementById('historyStatus').value,
+        date_from: document.getElementById('historyDateFrom').value,
+        date_to: document.getElementById('historyDateTo').value,
+        limit: 100
+      });
+      try {
+        const data = await api(`/api/hr/history?${params.toString()}`);
+        renderHistory(data.items || []);
+      } catch (error) {
+        hrFlash.textContent = error.message;
+      }
+    }
+
+    async function downloadHistoryPdf(historyId) {
+      const response = await fetch(`/api/hr/history/${historyId}/pdf`);
+      if (!response.ok) {
+        const data = await response.json();
+        hrFlash.textContent = data.message || data.error || 'Не удалось скачать PDF';
+        return;
+      }
+      const blob = await response.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `hr_history_${historyId}.pdf`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
+    document.getElementById('saveApiKeyBtn').addEventListener('click', () => {
+      localStorage.setItem('hr_api_key', getApiKey());
+      hrFlash.innerHTML = '<span class="good">Ключ сохранён в браузере</span>';
+    });
+    document.getElementById('verifyBtn').addEventListener('click', verifyManual);
+    document.getElementById('extractBtn').addEventListener('click', extractDocument);
+    document.getElementById('batchVerifyBtn').addEventListener('click', verifyBatchFile);
+    document.getElementById('downloadBatchCsvBtn').addEventListener('click', downloadBatchCsv);
+    document.getElementById('downloadResultPdfBtn').addEventListener('click', () => downloadResultPdf());
+    document.getElementById('loadHistoryBtn').addEventListener('click', loadHistory);
+    document.getElementById('quickModeBtn').addEventListener('click', () => setMode('quick'));
+    document.getElementById('extendedModeBtn').addEventListener('click', () => setMode('extended'));
+
+    window.downloadHistoryPdf = downloadHistoryPdf;
+
+    document.getElementById('apiKey').value = localStorage.getItem('hr_api_key') || '';
+    loadHistory();
+  </script>
+</body>
+</html>
