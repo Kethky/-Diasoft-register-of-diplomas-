@@ -2,7 +2,7 @@ from pathlib import Path
 
 from flask import Flask, jsonify, request
 
-from .config import Config
+from .config import get_config_class
 from .db import create_security_tables, update_db_schema
 from .extensions import limiter
 from .services.security_service import generate_csrf_token
@@ -16,7 +16,7 @@ def create_app() -> Flask:
         static_folder=str(base_dir / "static"),
         static_url_path="/static",
     )
-    app.config.from_object(Config)
+    app.config.from_object(get_config_class())
 
     limiter.init_app(app)
 
@@ -46,7 +46,6 @@ def create_app() -> Flask:
     from .routes.university import bp as university_bp
     from .routes.public import bp as public_bp
     from .routes.qr import bp as qr_bp
-    from .routes.hr import bp as hr_bp
     from .routes.admin import bp as admin_bp
 
     app.register_blueprint(pages_bp)
@@ -54,7 +53,6 @@ def create_app() -> Flask:
     app.register_blueprint(university_bp)
     app.register_blueprint(public_bp)
     app.register_blueprint(qr_bp)
-    app.register_blueprint(hr_bp)
     app.register_blueprint(admin_bp)
 
     return app

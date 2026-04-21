@@ -23,8 +23,7 @@
         <button type="submit">Войти</button>
       </form>
       <div style="display:flex; gap:10px; margin-top:14px;">
-        <a href="/dashboard.html" style="display:inline-block; text-decoration:none; padding:12px 14px; border-radius:12px; background:#274369; color:#fff; font-weight:700;">← На dashboard</a>
-        <a href="/" style="display:inline-block; text-decoration:none; padding:12px 14px; border-radius:12px; background:#22375c; color:#fff; font-weight:700;">На сайт</a>
+        <a href="/dashboard.html" style="display:inline-block; text-decoration:none; padding:12px 14px; border-radius:12px; background:#274369; color:#fff; font-weight:700;">← Выйти</a>
       </div>
       <div class="msg" id="msg"></div>
       <div class="muted" style="margin-top: 18px; font-size: 14px;">
@@ -33,11 +32,26 @@
       </div>
     </div>
   </div>
+  <div class="hotkey-hint">⏎ Enter - войти | ⎋ Esc - очистить</div>
 
   <script>
     const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
     const form = document.getElementById('loginForm');
     const msg = document.getElementById('msg');
+
+    function clearLoginForm() {
+      document.getElementById('login').value = '';
+      document.getElementById('password').value = '';
+      msg.textContent = '';
+      document.getElementById('login').focus();
+    }
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        clearLoginForm();
+      }
+    });
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();

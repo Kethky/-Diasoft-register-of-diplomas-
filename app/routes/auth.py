@@ -3,6 +3,7 @@ from flask import Blueprint, jsonify, redirect, request, session, url_for
 from app.decorators import check_blocked_ip, require_student
 from app.extensions import limiter
 from app.repositories.diploma_repository import get_diploma_status
+from app.services.audit_service import log_audit_event
 from app.services.auth_service import check_student_auth, check_university_auth
 from app.services.security_service import log_security_event
 
@@ -27,6 +28,7 @@ def login_student():
         session["role"] = "student"
         session["diploma_id"] = diploma_id
         session.modified = True
+        log_audit_event(action='student_login', entity_type='session', entity_id=diploma_id, details={'diploma_id': diploma_id})
         return jsonify({"success": True, "redirect": "/student"})
 
     log_security_event(request.remote_addr, "/login/student")
@@ -49,6 +51,7 @@ def login_university():
         session["university_code"] = result["university_code"]
         session["university_name"] = result["name"]
         session.modified = True
+        log_audit_event(action='university_login', entity_type='session', entity_id=result['university_code'], details={'name': result['name']})
         return jsonify({"success": True, "redirect": "/university"})
 
     log_security_event(request.remote_addr, "/login/university")

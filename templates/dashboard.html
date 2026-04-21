@@ -406,6 +406,10 @@
                 <div class="result-details">
                     Статус: диплом найден в реестре
                 </div>
+                <button class="report-btn"
+                        onclick="reportSuspiciousAction('${String(data.university_code).replace(/'/g, "\'")}', '${String(data.diploma_number).replace(/'/g, "\'")}')">
+                    Сообщить о подозрительных действиях
+                </button>
             `;
         } else {
             resultDiv.className = 'result invalid';

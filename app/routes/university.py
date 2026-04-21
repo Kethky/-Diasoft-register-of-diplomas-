@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify, request, send_file, session
 from app.decorators import check_blocked_ip
 from app.extensions import limiter
 from app.repositories.diploma_repository import clear_all_diplomas, delete_diploma
+from app.services.audit_service import log_audit_event
 from app.services.diploma_service import (
     create_signed_diploma,
     get_university_diplomas,
@@ -61,6 +62,12 @@ def api_add_diploma():
             specialty=specialty,
             diploma_number=diploma_number,
         )
+        log_audit_event(
+            action='create_diploma',
+            entity_type='diploma',
+            entity_id=result['diploma_id'],
+            details={'diploma_number': diploma_number, 'full_name': full_name, 'university_code': university_code},
+        )
         return jsonify(
             {
                 "success": True,
@@ -110,6 +117,12 @@ def api_toggle_status():
     if not success:
         return jsonify({"success": False, "message": "Ошибка при обновлении"})
 
+    log_audit_event(
+        action='toggle_diploma_status',
+        entity_type='diploma',
+        entity_id=diploma_id,
+        details={'new_status': new_status, 'university_code': session['university_code']},
+    )
     return jsonify({"success": True, "new_status": new_status})
 
 
@@ -119,6 +132,12 @@ def api_clear_all_diplomas():
         return jsonify({"error": "Не авторизован"}), 401
 
     deleted_count = clear_all_diplomas(session["university_code"])
+    log_audit_event(
+        action='clear_all_diplomas',
+        entity_type='university',
+        entity_id=session['university_code'],
+        details={'deleted_count': deleted_count},
+    )
     return jsonify({"success": True, "deleted_count": deleted_count})
 
 
@@ -134,6 +153,12 @@ def api_delete_diploma():
     if not deleted:
         return jsonify({"success": False, "message": "Диплом не найден"})
 
+    log_audit_event(
+        action='delete_diploma',
+        entity_type='diploma',
+        entity_id=diploma_id,
+        details={'university_code': session['university_code']},
+    )
     return jsonify({"success": True})
 
 
@@ -161,6 +186,12 @@ def api_upload_excel():
             return jsonify({"success": False, "message": "Файл не содержит данных"})
 
         result = bulk_import_diplomas(df, session["university_code"])
+        log_audit_event(
+            action='bulk_import_diplomas',
+            entity_type='university',
+            entity_id=session['university_code'],
+            details=result,
+        )
         return jsonify({"success": True, **result})
     except Exception as error:
         return jsonify({"success": False, "message": f"Ошибка при обработке файла: {error}"})

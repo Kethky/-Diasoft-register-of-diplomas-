@@ -20,6 +20,7 @@ from app.services.admin_service import (
     reset_university_password,
     show_suspicious_reports,
 )
+from app.services.audit_service import get_audit_logs, log_audit_event, purge_audit_logs
 from app.services.auth_service import check_admin_auth
 from app.services.security_service import log_security_event
 
@@ -49,6 +50,14 @@ def login_admin():
         session["role"] = "admin"
         session["admin_login"] = login
         session.modified = True
+        log_audit_event(
+            action='admin_login',
+            entity_type='session',
+            entity_id=login,
+            details={'login': login},
+            actor_role='admin',
+            actor_identifier=login,
+        )
         return jsonify({"success": True, "redirect": "/admin"})
 
     log_security_event(request.remote_addr, "/login/admin")
@@ -182,6 +191,24 @@ def api_clear_security_logs():
 def api_clear_verification_logs():
     deleted = clear_verification_logs()
     return jsonify({"success": True, "message": "Логи проверок дипломов очищены", "deleted_count": deleted})
+
+
+
+
+@bp.route("/api/admin/logs/audit")
+@require_admin
+@require_csrf
+def api_audit_logs():
+    limit = min(int(request.args.get("limit", 50)), 200)
+    return jsonify({"items": get_audit_logs(limit)})
+
+
+@bp.route("/api/admin/logs/audit/clear", methods=["POST"])
+@require_admin
+@require_csrf
+def api_clear_audit_logs():
+    deleted = purge_audit_logs()
+    return jsonify({"success": True, "message": "Аудит-лог очищен", "deleted_count": deleted})
 
 
 @bp.route("/api/admin/reports/suspicious")

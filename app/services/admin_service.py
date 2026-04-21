@@ -27,6 +27,7 @@ from app.repositories.university_repository import (
     update_university_password_hash,
 )
 from app.services.auth_service import hash_password
+from app.services.audit_service import log_audit_event
 from app.services.diploma_service import clear_university_list_cache
 
 
@@ -114,6 +115,12 @@ def add_university(name: str, university_code: str):
         password_hash=password_hash,
     )
     clear_university_list_cache()
+    log_audit_event(
+        action='create_university',
+        entity_type='university',
+        entity_id=university_code,
+        details={'name': name, 'login': login, 'university_code': university_code},
+    )
 
     return {
         "university_code": university_code,
@@ -132,6 +139,12 @@ def delete_university(university_code: str):
     deleted = delete_university_by_code(university_code)
     if deleted:
         clear_university_list_cache()
+        log_audit_event(
+            action='delete_university',
+            entity_type='university',
+            entity_id=university_code,
+            details=university,
+        )
         return university
     return None
 
@@ -168,6 +181,12 @@ def generate_student_secrets():
         secret = secrets.token_urlsafe(12)
         secret_hash = hash_password(secret)
         set_student_secret_hash(row["id"], secret_hash)
+        log_audit_event(
+            action='generate_student_secret',
+            entity_type='diploma',
+            entity_id=row['id'],
+            details={'diploma_number': row['diploma_number'], 'university_code': row['university_code']},
+        )
         results.append(
             {
                 "id": row["id"],
@@ -190,6 +209,12 @@ def reset_student_secret_by_diploma(diploma_id: int):
     new_secret = secrets.token_urlsafe(12)
     new_secret_hash = hash_password(new_secret)
     set_student_secret_hash(diploma_id, new_secret_hash)
+    log_audit_event(
+        action='reset_student_secret',
+        entity_type='diploma',
+        entity_id=diploma_id,
+        details={'diploma_number': row['diploma_number'], 'university_code': row['university_code']},
+    )
 
     return {
         "id": row["id"],
@@ -210,6 +235,12 @@ def delete_student_secret_by_diploma(diploma_id: int):
     if not updated:
         return None
 
+    log_audit_event(
+        action='clear_student_secret',
+        entity_type='diploma',
+        entity_id=diploma_id,
+        details={'diploma_number': row['diploma_number'], 'university_code': row['university_code']},
+    )
     return row
 
 
@@ -226,6 +257,12 @@ def reset_university_password(university_code: str):
     if not updated:
         return None
 
+    log_audit_event(
+        action='reset_university_password',
+        entity_type='university',
+        entity_id=university_code,
+        details={'name': university['name'], 'login': university['login']},
+    )
     return {
         "university_code": university["university_code"],
         "name": university["name"],

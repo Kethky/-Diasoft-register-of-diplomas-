@@ -15,7 +15,6 @@
       <div class="sub">Управление ВУЗами, паролями студентов и журналами безопасности</div>
     </div>
     <div class="actions">
-      <a class="btn secondary" href="/">На сайт</a>
       <a class="btn" href="/logout">Выйти</a>
     </div>
   </div>
@@ -62,9 +61,10 @@
 
       <section class="card">
         <h2>Управление ВУЗами</h2>
-        <p>Добавление и удаление ВУЗов из интерфейса сайта.</p>
-        <div class="controls" style="grid-template-columns: 1fr auto;">
+        <p>Добавление и удаление ВУЗов из интерфейса сайта. Код ВУЗа задаётся вручную администратором.</p>
+        <div class="controls" style="grid-template-columns: 1fr 220px auto;">
           <input id="universityName" placeholder="Полное название ВУЗа">
+          <input id="universityCode" placeholder="Код ВУЗа">
           <button id="addUniversityBtn">Добавить ВУЗ</button>
         </div>
         <div class="flash" id="universityFlash"></div>
@@ -96,6 +96,18 @@
         <div class="panel-list" id="securityLogs"></div>
       </section>
 
+
+
+      <section class="card">
+        <h2>Аудит-лог</h2>
+        <p>Действия администраторов, ВУЗов и студентов.</p>
+        <div class="actions" style="margin-bottom:12px;">
+          <button id="loadAuditLogsBtn" class="btn secondary">Загрузить</button>
+          <button id="clearAuditLogsBtn" class="btn danger">Очистить</button>
+        </div>
+        <div class="panel-list" id="auditLogs"></div>
+      </section>
+
       <section class="card">
         <h2>Логи проверок дипломов</h2>
         <p>Последние записи verification_logs.</p>
@@ -113,6 +125,10 @@
       <div class="actions" style="margin-bottom:12px;"><button id="loadSuspiciousBtn" class="btn secondary">Загрузить</button></div>
       <div class="panel-list" id="suspiciousReports"></div>
     </section>
+  </div>
+
+  <div class="hotkey-hint">
+    ⏎ Enter - обновить поиск / добавить ВУЗ | ⎋ Esc - очистить поля
   </div>
 
   <script>
@@ -217,8 +233,8 @@
           <td>${universityPasswordCell(row)}</td>
           <td>
             <div class="actions">
-              <button class="btn secondary" onclick="resetUniversityPassword(${row.university_code}, '${escapeHtml(row.name)}')">Пересоздать пароль</button>
-              <button class="btn danger" onclick="deleteUniversity(${row.university_code}, '${escapeHtml(row.name)}')">Удалить</button>
+              <button class="btn secondary" onclick="resetUniversityPassword('${escapeHtml(row.university_code)}', '${escapeHtml(row.name)}')">Пересоздать пароль</button>
+              <button class="btn danger" onclick="deleteUniversity('${escapeHtml(row.university_code)}', '${escapeHtml(row.name)}')">Удалить</button>
             </div>
           </td>
         </tr>
@@ -227,19 +243,26 @@
 
     async function addUniversity() {
       const nameInput = document.getElementById('universityName');
+      const codeInput = document.getElementById('universityCode');
       const name = nameInput.value.trim();
+      const universityCode = codeInput.value.trim();
       if (!name) {
         universityFlash.textContent = 'Введите название ВУЗа';
+        return;
+      }
+      if (!universityCode) {
+        universityFlash.textContent = 'Введите код ВУЗа';
         return;
       }
       try {
         const data = await api('/api/admin/universities', {
           method: 'POST',
-          body: JSON.stringify({ name })
+          body: JSON.stringify({ name, university_code: universityCode })
         });
         const item = data.item;
         universityFlash.innerHTML = `<span class="good">ВУЗ добавлен. Логин: <b>${escapeHtml(item.login)}</b>, пароль: <b>${escapeHtml(item.password)}</b></span>`;
         nameInput.value = '';
+        codeInput.value = '';
         await loadUniversities();
       } catch (error) {
         universityFlash.textContent = error.message;
@@ -355,6 +378,22 @@
       }
     }
 
+    async function loadAuditLogs() {
+      const data = await api('/api/admin/logs/audit?limit=50');
+      renderLogItems('auditLogs', data.items || []);
+    }
+
+    async function clearAuditLogs() {
+      if (!confirm('Очистить аудит-лог?')) return;
+      try {
+        const data = await api('/api/admin/logs/audit/clear', { method: 'POST' });
+        renderLogItems('auditLogs', []);
+        studentFlash.innerHTML = `<span class="good">${escapeHtml(data.message)}${data.deleted_count !== undefined ? ` (${data.deleted_count})` : ''}</span>`;
+      } catch (error) {
+        studentFlash.textContent = error.message;
+      }
+    }
+
     async function clearVerificationLogs() {
       if (!confirm('Очистить все логи проверок дипломов?')) return;
       try {
@@ -366,6 +405,35 @@
       }
     }
 
+
+    function clearAdminInputs() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('universityName').value = '';
+      document.getElementById('universityCode').value = '';
+      studentFlash.textContent = '';
+      universityFlash.textContent = '';
+    }
+
+    document.addEventListener('keydown', (event) => {
+      const activeTag = document.activeElement?.tagName;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        clearAdminInputs();
+        return;
+      }
+
+      if (event.key !== 'Enter') return;
+
+      if (activeTag === 'TEXTAREA') return;
+      const activeId = document.activeElement?.id;
+      if (activeId === 'universityName' || activeId === 'universityCode') {
+        event.preventDefault();
+        addUniversity();
+        return;
+      }
+      event.preventDefault();
+      loadStudentRows();
+    });
 
     async function loadSuspiciousReports() {
       const data = await api('/api/admin/reports/suspicious?limit=50');
@@ -379,6 +447,8 @@
     document.getElementById('clearSecurityLogsBtn').addEventListener('click', clearSecurityLogs);
     document.getElementById('loadVerificationLogsBtn').addEventListener('click', loadVerificationLogs);
     document.getElementById('clearVerificationLogsBtn').addEventListener('click', clearVerificationLogs);
+    document.getElementById('loadAuditLogsBtn').addEventListener('click', loadAuditLogs);
+    document.getElementById('clearAuditLogsBtn').addEventListener('click', clearAuditLogs);
     document.getElementById('loadSuspiciousBtn').addEventListener('click', loadSuspiciousReports);
     document.getElementById('sortBy').addEventListener('change', loadStudentRows);
     document.getElementById('sortDir').addEventListener('change', loadStudentRows);
@@ -391,7 +461,7 @@
     window.deleteUniversity = deleteUniversity;
     window.resetUniversityPassword = resetUniversityPassword;
 
-    Promise.all([loadStudentRows(), loadUniversities(), loadSecurityLogs(), loadVerificationLogs(), loadSuspiciousReports()]).catch(error => {
+    Promise.all([loadStudentRows(), loadUniversities(), loadSecurityLogs(), loadVerificationLogs(), loadAuditLogs(), loadSuspiciousReports()]).catch(error => {
       studentFlash.textContent = error.message;
     });
   </script>

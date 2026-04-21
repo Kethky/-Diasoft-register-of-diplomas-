@@ -81,14 +81,14 @@ def api_generate_temp_link():
     if not diploma:
         return jsonify({"success": False, "message": "Диплом не найден"}), 404
 
-    token, _expiry_timestamp = build_temp_token(
+    token, _expiry_timestamp, qr_signature = build_temp_token(
         diploma_id=diploma["id"],
         university_code=diploma["university_code"],
         diploma_number=diploma["diploma_number"],
         expiry_seconds=expiry_seconds,
     )
 
-    temp_link = f"{request.host_url}?token={token}"
+    temp_link = f"{request.host_url}?token={token}&sig={qr_signature}"
     total_hours = expiry_seconds / 3600
     days = int(total_hours // 24)
     hours = int(total_hours % 24)
