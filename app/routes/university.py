@@ -68,11 +68,24 @@ def api_add_diploma():
             entity_id=result['diploma_id'],
             details={'diploma_number': diploma_number, 'full_name': full_name, 'university_code': university_code},
         )
+        message = "Диплом добавлен. Создан дополнительный логин для существующего студенческого аккаунта" if result["student_account_reused"] else "Диплом добавлен и создан новый студенческий аккаунт"
+        password_line = result['student_secret'] if result['student_secret'] else 'ранее выданный пароль (не изменялся)'
+        password_file_content = (
+            f"ФИО: {full_name}\n"
+            f"Номер диплома: {diploma_number}\n"
+            f"Логин для входа: {diploma_number}\n"
+            f"Пароль: {password_line}\n"
+            f"ВУЗ: {university_code}\n"
+        )
         return jsonify(
             {
                 "success": True,
-                "message": "Диплом добавлен и подписан",
+                "message": message,
                 "student_secret": result["student_secret"],
+                "existing_password_notice": None if result["student_secret"] else "Для этого ФИО используется ранее выданный пароль. Он не пересоздавался.",
+                "student_account_reused": result["student_account_reused"],
+                "password_file_name": f"student_access_{diploma_number}.txt",
+                "password_file_content": password_file_content,
             }
         )
     except Exception as error:

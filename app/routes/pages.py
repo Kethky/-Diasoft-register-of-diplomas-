@@ -1,7 +1,7 @@
 from flask import Blueprint, redirect, render_template, session, url_for
 
 from app.repositories.diploma_repository import get_diploma_student_view
-from app.services.diploma_service import get_university_diplomas
+from app.services.diploma_service import get_current_student_diplomas, get_default_student_diploma, get_university_diplomas
 
 bp = Blueprint("pages", __name__)
 
@@ -35,24 +35,28 @@ def university():
     university_name = session.get("university_name")
     diplomas = get_university_diplomas(university_code)
 
-    return render_template(
-        "university.html",
-        university_name=university_name,
-        university_code=university_code,
-        diplomas=diplomas,
-    )
+    return render_template("university.html", university_name=university_name, university_code=university_code, diplomas=diplomas)
 
 
 @bp.route("/student")
 def student():
-    if session.get("role") != "student" or "diploma_id" not in session:
+    if session.get("role") != "student" or "student_account_id" not in session:
         return redirect(url_for("pages.index"))
 
-    diploma = get_diploma_student_view(session["diploma_id"])
+    if "selected_diploma_id" not in session:
+        default_diploma = get_default_student_diploma(session["student_account_id"])
+        if not default_diploma:
+            session.clear()
+            return redirect(url_for("pages.index"))
+        session["selected_diploma_id"] = default_diploma["id"]
+        session["diploma_id"] = default_diploma["id"]
+
+    diploma = get_diploma_student_view(session["selected_diploma_id"])
     if not diploma:
         session.clear()
         return redirect(url_for("pages.index"))
 
+    diplomas = get_current_student_diplomas()
     return render_template(
         "student.html",
         full_name=diploma["full_name"],
@@ -60,7 +64,9 @@ def student():
         status=diploma["status"],
         graduation_year=diploma["graduation_year"],
         specialty=diploma["specialty"],
-        university_code=diploma["university_code"],
+        university_name=diploma.get("university_name") or diploma["university_code"],
+        diplomas=diplomas,
+        selected_diploma_id=diploma["id"],
     )
 
 

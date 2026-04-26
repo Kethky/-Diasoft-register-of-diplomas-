@@ -35,11 +35,7 @@ def api_scan_qr():
             result="scanned",
         )
 
-        payload = {
-            "success": True,
-            "university_code": result["university_code"],
-            "diploma_number": result["diploma_number"],
-        }
+        payload = {"success": True, "university_code": result["university_code"], "diploma_number": result["diploma_number"]}
         if "temp_token" in result:
             payload["temp_token"] = result["temp_token"]
         return jsonify(payload)
@@ -72,13 +68,14 @@ def api_generate_qr():
 def api_generate_temp_link():
     data = request.get_json() or {}
     expiry_seconds = int(data.get("expiry_seconds", 3600))
+    diploma_id = data.get("diploma_id") or session.get("selected_diploma_id")
 
     max_seconds = 30 * 24 * 60 * 60
     min_seconds = 60
     expiry_seconds = min(max(expiry_seconds, min_seconds), max_seconds)
 
-    diploma = get_diploma_by_id(session["diploma_id"])
-    if not diploma:
+    diploma = get_diploma_by_id(diploma_id)
+    if not diploma or diploma.get('student_account_id') != session.get('student_account_id'):
         return jsonify({"success": False, "message": "Диплом не найден"}), 404
 
     token, _expiry_timestamp, qr_signature = build_temp_token(
@@ -93,19 +90,24 @@ def api_generate_temp_link():
     days = int(total_hours // 24)
     hours = int(total_hours % 24)
 
-    return jsonify(
-        {
-            "success": True,
-            "link": temp_link,
-            "expires_in_seconds": expiry_seconds,
-            "expires_in_days": days,
-            "expires_in_hours": hours,
-        }
-    )
+    return jsonify({
+        "success": True,
+        "link": temp_link,
+        "expires_in_seconds": expiry_seconds,
+        "expires_in_days": days,
+        "expires_in_hours": hours,
+        "diploma_id": diploma["id"],
+    })
 
 
 @bp.route("/api/revoke_qr", methods=["POST"])
 @require_student
 def api_revoke_qr():
-    revoke_active_token(session["diploma_id"])
+    data = request.get_json() or {}
+    diploma_id = data.get("diploma_id") or session.get("selected_diploma_id")
+    diploma = get_diploma_by_id(diploma_id)
+    if not diploma or diploma.get('student_account_id') != session.get('student_account_id'):
+        return jsonify({"success": False, "message": "Диплом не найден"}), 404
+
+    revoke_active_token(diploma_id)
     return jsonify({"success": True, "message": "QR-код отозван"})

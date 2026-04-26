@@ -26,8 +26,11 @@ def check_student_auth(diploma_number: str, student_secret: str):
     if not row:
         return None
 
-    if verify_password(student_secret, row["student_secret_hash"]):
-        return row["id"]
+    if verify_password(student_secret, row["secret_hash"]):
+        return {
+            'student_account_id': row['student_account_id'],
+            'diploma_id': row['diploma_id'],
+        }
 
     return None
 

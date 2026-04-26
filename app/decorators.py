@@ -20,7 +20,7 @@ def require_csrf(func):
 def require_student(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        if session.get("role") != "student" or "diploma_id" not in session:
+        if session.get("role") != "student" or "student_account_id" not in session or "selected_diploma_id" not in session:
             return jsonify({"error": "Не авторизован"}), 401
         return func(*args, **kwargs)
 
@@ -42,14 +42,7 @@ def check_blocked_ip(func):
     def decorated_function(*args, **kwargs):
         ip = request.remote_addr
         if is_ip_blocked(ip):
-            return (
-                jsonify(
-                    {
-                        "error": "IP заблокирован за нарушение правил использования. Обратитесь к администратору."
-                    }
-                ),
-                403,
-            )
+            return (jsonify({"error": "IP заблокирован за нарушение правил использования. Обратитесь к администратору."}), 403)
         return func(*args, **kwargs)
 
     return decorated_function

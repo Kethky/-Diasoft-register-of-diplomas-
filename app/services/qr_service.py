@@ -59,7 +59,7 @@ def verify_qr_payload(payload: dict, signature: str | None) -> bool:
 
 
 
-def build_temp_token(diploma_id: int, university_code: str, diploma_number: str, expiry_seconds: int):
+def build_temp_token(diploma_id: int, university_code, diploma_number: str, expiry_seconds: int):
     expiry_timestamp = int(time.time()) + expiry_seconds
     token = get_serializer().dumps(
         {
@@ -176,7 +176,7 @@ def decode_qr_upload(file_storage):
             return {
                 'success': True,
                 'status_code': 200,
-                'university_code': int(uni_code),
+                'university_code': str(uni_code),
                 'diploma_number': str(dip_num),
             }
 
