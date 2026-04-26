@@ -11,6 +11,9 @@
 <body>
   <div class="wrap">
     <div class="card">
+      <button class="theme-toggle" type="button" onclick="toggleTheme()">
+        <img src="/static/png/moon.png" alt="Тёмная тема" id="themeIcon">
+      </button>
       <h1>Админ-панель</h1>
       <div class="muted">Войдите под учетной записью администратора.</div>
       <form id="loginForm">
@@ -20,11 +23,9 @@
         <label for="password">Пароль</label>
         <input id="password" name="password" type="password" autocomplete="current-password" required>
 
-        <button type="submit">Войти</button>
+        <button class="primary" type="submit">Войти</button>
       </form>
-      <div style="display:flex; gap:10px; margin-top:14px;">
-        <a href="/dashboard.html" style="display:inline-block; text-decoration:none; padding:12px 14px; border-radius:12px; background:#274369; color:#fff; font-weight:700;">← Выйти</a>
-      </div>
+      <a href="/index" class="exit-link">Выйти</a>
       <div class="msg" id="msg"></div>
       <div class="muted" style="margin-top: 18px; font-size: 14px;">
         Для локального запуска по умолчанию: <b>admin</b> / <b>admin123!</b>.<br>
@@ -32,26 +33,42 @@
       </div>
     </div>
   </div>
-  <div class="hotkey-hint">⏎ Enter - войти | ⎋ Esc - очистить</div>
 
   <script>
+
+    function toggleTheme() {
+      document.body.classList.toggle('dark');
+      const themeIcon = document.getElementById('themeIcon');
+      if (document.body.classList.contains('dark')) {
+        themeIcon.src = '/static/png/sun.png';
+        themeIcon.alt = 'Светлая тема';
+        localStorage.setItem('theme', 'dark');
+      } else {
+        themeIcon.src = '/static/png/moon.png';
+        themeIcon.alt = 'Тёмная тема';
+        localStorage.setItem('theme', 'light');
+      }
+    }
+
+    function loadTheme() {
+      const savedTheme = localStorage.getItem('theme');
+      const themeIcon = document.getElementById('themeIcon');
+      if (savedTheme === 'dark') {
+        document.body.classList.add('dark');
+        themeIcon.src = '/static/png/sun.png';
+        themeIcon.alt = 'Светлая тема';
+      } else {
+        document.body.classList.remove('dark');
+        themeIcon.src = '/static/png/moon.png';
+        themeIcon.alt = 'Тёмная тема';
+      }
+    }
+
+    loadTheme();
+
     const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
     const form = document.getElementById('loginForm');
     const msg = document.getElementById('msg');
-
-    function clearLoginForm() {
-      document.getElementById('login').value = '';
-      document.getElementById('password').value = '';
-      msg.textContent = '';
-      document.getElementById('login').focus();
-    }
-
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        clearLoginForm();
-      }
-    });
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();

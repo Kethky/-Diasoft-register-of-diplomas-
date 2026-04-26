@@ -43,7 +43,7 @@
         }
         
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease; }
-        body { background: var(--bg); background-image: var(--bg-image);color: var(--text); padding: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
+        body { background: var(--bg); background-image: var(--bg-image); background-size: cover; background-position: center; background-attachment: fixed; background-repeat: no-repeat; color: var(--text); padding: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
         
         .card { background: var(--card-bg); padding: 35px; border-radius: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); width: 480px; border: 1px solid var(--border); position: relative; }
         

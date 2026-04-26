@@ -15,6 +15,9 @@
       <div class="sub">Управление ВУЗами, паролями студентов и журналами безопасности</div>
     </div>
     <div class="actions">
+      <button class="theme-toggle" type="button" onclick="toggleTheme()">
+        <img src="/static/png/moon.png" alt="Тёмная тема" id="themeIcon">
+      </button>
       <a class="btn" href="/logout">Выйти</a>
     </div>
   </div>
@@ -127,11 +130,36 @@
     </section>
   </div>
 
-  <div class="hotkey-hint">
-    ⏎ Enter - обновить поиск / добавить ВУЗ | ⎋ Esc - очистить поля
-  </div>
-
   <script>
+
+    function toggleTheme() {
+      document.body.classList.toggle('dark');
+      const themeIcon = document.getElementById('themeIcon');
+      if (document.body.classList.contains('dark')) {
+        themeIcon.src = '/static/png/sun.png';
+        themeIcon.alt = 'Светлая тема';
+        localStorage.setItem('theme', 'dark');
+      } else {
+        themeIcon.src = '/static/png/moon.png';
+        themeIcon.alt = 'Тёмная тема';
+        localStorage.setItem('theme', 'light');
+      }
+    }
+
+    function loadTheme() {
+      const savedTheme = localStorage.getItem('theme');
+      const themeIcon = document.getElementById('themeIcon');
+      if (savedTheme === 'dark') {
+        document.body.classList.add('dark');
+        themeIcon.src = '/static/png/sun.png';
+        themeIcon.alt = 'Светлая тема';
+      } else {
+        document.body.classList.remove('dark');
+        themeIcon.src = '/static/png/moon.png';
+        themeIcon.alt = 'Тёмная тема';
+      }
+    }
+
     const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
     const studentTableBody = document.getElementById('studentTableBody');
     const universityTableBody = document.getElementById('universityTableBody');
@@ -171,7 +199,7 @@
       if (issuedStudentSecrets.has(row.id)) {
         return `<span class="badge success">${escapeHtml(issuedStudentSecrets.get(row.id))}</span>`;
       }
-      if (row.has_password) {
+      if (row.has_password || row.has_secret ) {
         return '<span class="badge">Скрыт (хэш)</span>';
       }
       return '<span class="badge warn">Не выдан</span>';
@@ -406,35 +434,6 @@
     }
 
 
-    function clearAdminInputs() {
-      document.getElementById('searchInput').value = '';
-      document.getElementById('universityName').value = '';
-      document.getElementById('universityCode').value = '';
-      studentFlash.textContent = '';
-      universityFlash.textContent = '';
-    }
-
-    document.addEventListener('keydown', (event) => {
-      const activeTag = document.activeElement?.tagName;
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        clearAdminInputs();
-        return;
-      }
-
-      if (event.key !== 'Enter') return;
-
-      if (activeTag === 'TEXTAREA') return;
-      const activeId = document.activeElement?.id;
-      if (activeId === 'universityName' || activeId === 'universityCode') {
-        event.preventDefault();
-        addUniversity();
-        return;
-      }
-      event.preventDefault();
-      loadStudentRows();
-    });
-
     async function loadSuspiciousReports() {
       const data = await api('/api/admin/reports/suspicious?limit=50');
       renderLogItems('suspiciousReports', data.items || []);
@@ -460,6 +459,8 @@
     window.clearStudentSecret = clearStudentSecret;
     window.deleteUniversity = deleteUniversity;
     window.resetUniversityPassword = resetUniversityPassword;
+
+    loadTheme();
 
     Promise.all([loadStudentRows(), loadUniversities(), loadSecurityLogs(), loadVerificationLogs(), loadAuditLogs(), loadSuspiciousReports()]).catch(error => {
       studentFlash.textContent = error.message;

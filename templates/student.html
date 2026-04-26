@@ -3,41 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <title>Мой профиль - ДипломРеестр</title>
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/student.css') }}">
-
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/student.css') }}">
+    <style>
+        .diploma-switcher { margin: 14px 0 18px 0; }
+        .diploma-switcher select {
+            width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(148,163,184,.3);
+            background: var(--card-bg, #111827); color: var(--text-primary, #fff);
+        }
+        .diploma-helper { font-size: 12px; color: var(--text-secondary); margin-top: 6px; }
+    </style>
 </head>
 <body>
     <div class="card">
         <button class="theme-toggle" onclick="toggleTheme()">
             <img src="/static/png/moon.png" alt="Тёмная тема" id="themeIcon">
         </button>
-        
+
         <div class="full-name" id="full-name">{{ full_name }}</div>
-        
-        <div>
-            <div class="status status-active" id="status-badge">
-                СТАТУС: ЗАГРУЗКА...
-            </div>
+
+        {% if diplomas|length > 1 %}
+        <div class="diploma-switcher">
+            <div class="info-label">Активный диплом</div>
+            <select id="diploma-select" onchange="selectDiploma(this.value)">
+                {% for item in diplomas %}
+                <option value="{{ item.id }}" {% if item.id == selected_diploma_id %}selected{% endif %}>
+                    {{ item.diploma_number }} — {{ item.specialty }} ({{ item.graduation_year }})
+                </option>
+                {% endfor %}
+            </select>
+            <div class="diploma-helper">Выберите диплом, для которого нужно создавать QR-код или временную ссылку.</div>
         </div>
-        
+        {% endif %}
+
+        <div>
+            <div class="status status-active" id="status-badge">СТАТУС: ЗАГРУЗКА...</div>
+        </div>
+
         <div class="info-row">
             <div class="info-label">Номер диплома</div>
-            <div class="info-value">{{ diploma_number }}</div>
+            <div class="info-value" id="info-diploma-number">{{ diploma_number }}</div>
         </div>
         <div class="info-row">
             <div class="info-label">Год выпуска</div>
-            <div class="info-value">{{ graduation_year }}</div>
+            <div class="info-value" id="info-graduation-year">{{ graduation_year }}</div>
         </div>
         <div class="info-row">
             <div class="info-label">Специальность</div>
-            <div class="info-value">{{ specialty }}</div>
+            <div class="info-value" id="info-specialty">{{ specialty }}</div>
         </div>
         <div class="info-row">
-            <div class="info-label">Код ВУЗа</div>
-            <div class="info-value">{{ university_code }}</div>
+            <div class="info-label">Название ВУЗа</div>
+            <div class="info-value" id="info-university-name">{{ university_name }}</div>
         </div>
-        
-        <!-- Поля для выбора длительности QR -->
+
         <div class="section-title">Настройка QR-кода</div>
         <div style="display: flex; gap: 15px; margin: 10px 0 10px 0;">
             <div style="flex: 1;">
@@ -50,10 +68,10 @@
             </div>
         </div>
         <small style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 15px;">Срок действия QR-ссылки (макс: 30 дней, мин: 1 минута)</small>
-        
+
         <button class="btn" onclick="generateQR()">Генерация QR-кода</button>
         <button class="btn" onclick="revokeQR()" style="background: #ef4444;">Отозвать QR-код</button>
-        
+
         <div id="qr-container" class="qr-container" style="display:none;">
             <div>QR-код для проверки диплома:</div>
             <img id="qr-image" src="" alt="QR-код">
@@ -63,7 +81,6 @@
             <div id="share-link" class="share-link"></div>
         </div>
 
-        <!-- Поля для выбора длительности временной ссылки -->
         <div class="section-title">Настройка временной ссылки</div>
         <div style="display: flex; gap: 15px; margin: 10px 0 10px 0;">
             <div style="flex: 1;">
@@ -77,19 +94,22 @@
         </div>
         <small style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 5px;">Максимум: 30 дней. Минимум: 1 минута</small>
 
-        <button class="btn" onclick="generateTempLink()" ">Создать временную ссылку</button>
+        <button class="btn" onclick="generateTempLink()">Создать временную ссылку</button>
 
         <div class="logout-link">
             <a href="/logout" id="logout-link">Выйти из системы</a>
         </div>
     </div>
-    
+
     <div id="toast" class="toast">Ссылка скопирована</div>
     <div class="hotkey-hint">⎋ Esc - выход из системы</div>
-    
+
     <script>
-        // --- Тёмная тема с картинками ---
-       function toggleTheme() {
+        const studentDiplomas = {{ diplomas|tojson }};
+        let selectedDiplomaId = {{ selected_diploma_id|tojson }};
+        let currentQRUrl = "";
+
+        function toggleTheme() {
             document.body.classList.toggle('dark');
             const themeIcon = document.getElementById('themeIcon');
             if (document.body.classList.contains('dark')) {
@@ -102,7 +122,7 @@
                 localStorage.setItem('theme', 'light');
             }
         }
-        
+
         function loadTheme() {
             const savedTheme = localStorage.getItem('theme');
             const themeIcon = document.getElementById('themeIcon');
@@ -116,50 +136,52 @@
                 themeIcon.alt = 'Тёмная тема';
             }
         }
-        
-        const fullName = "{{ full_name }}";
-        const diplomaNumber = "{{ diploma_number }}";
-        const universityCode = "{{ university_code }}";
-        let currentQRUrl = "";
-        
-        function revokeQR() {
-            if (!confirm('Вы уверены, что хотите отозвать текущий QR-код? Новый QR-код нужно будет создать заново.')) {
-                return;
-            }
-            
-            fetch('/api/revoke_qr', {
+
+        function currentDiploma() {
+            return studentDiplomas.find(item => item.id === Number(selectedDiplomaId)) || studentDiplomas[0];
+        }
+
+        function renderDiplomaInfo() {
+            const diploma = currentDiploma();
+            if (!diploma) return;
+            document.getElementById('full-name').textContent = diploma.full_name;
+            document.getElementById('info-diploma-number').textContent = diploma.diploma_number;
+            document.getElementById('info-graduation-year').textContent = diploma.graduation_year;
+            document.getElementById('info-specialty').textContent = diploma.specialty;
+            document.getElementById('info-university-name').textContent = diploma.university_name || diploma.university_code;
+            const select = document.getElementById('diploma-select');
+            if (select) select.value = diploma.id;
+        }
+
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2200);
+        }
+
+        function selectDiploma(diplomaId) {
+            fetch('/api/student/select_diploma', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-Token': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({})
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': '{{ csrf_token }}' },
+                body: JSON.stringify({ diploma_id: Number(diplomaId) })
             })
             .then(response => response.json())
             .then(data => {
-                if (data.success) {
-                    showToast('QR-код отозван');
-                    document.getElementById('qr-container').style.display = 'none';
-                    currentQRUrl = "";
-                } else {
-                    showToast(data.message || 'Ошибка при отзыве QR-кода', true);
+                if (!data.success) {
+                    showToast(data.message || 'Не удалось выбрать диплом', true);
+                    return;
                 }
+                selectedDiplomaId = Number(diplomaId);
+                renderDiplomaInfo();
+                refreshStatus();
+                document.getElementById('qr-container').style.display = 'none';
+                currentQRUrl = '';
+                showToast('Активный диплом изменён');
             })
-            .catch(error => {
-                console.error('Ошибка:', error);
-                showToast('Ошибка при отзыве QR-кода', true);
-            });
+            .catch(() => showToast('Ошибка при переключении диплома', true));
         }
-        
-        function showToast(message, isError = false) {
-            const toast = document.getElementById('toast');
-            toast.textContent = isError ? '' + message : '' + message;
-            toast.classList.add('show');
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 2000);
-        }
-        
+
         function refreshStatus() {
             fetch('/api/student/status')
                 .then(response => response.json())
@@ -175,260 +197,135 @@
                         statusBadge.innerHTML = 'СТАТУС: НЕИЗВЕСТЕН';
                     }
                 })
-                .catch(error => {
-                    console.error('Ошибка:', error);
-                });
+                .catch(() => {});
         }
-        
-        refreshStatus();
-        
-        function generateQR() {
-            let days = parseInt(document.getElementById('qr-expiry-days').value) || 0;
-            let hours = parseInt(document.getElementById('qr-expiry-hours').value) || 0;
-            
-            if (days < 0) days = 0;
-            if (hours < 0) hours = 0;
-            
-            if (days > 30) {
-                days = 30;
-                document.getElementById('qr-expiry-days').value = 30;
-                showToast('Максимум 30 дней', true);
-            }
-            if (hours > 23) {
-                hours = 23;
-                document.getElementById('qr-expiry-hours').value = 23;
-                showToast('Часы не могут быть больше 23', true);
-            }
-            
-            let totalHours = (days * 24) + hours;
-            
-            if (totalHours < 0.0167) {
-                totalHours = 0.0167;
-                showToast('Минимальная длительность 1 минута', true);
-            }
-            
-            const expirySeconds = Math.floor(totalHours * 60 * 60);
-            
-            fetch('/api/generate_temp_link', {
+
+        function revokeQR() {
+            if (!confirm('Вы уверены, что хотите отозвать текущий QR-код? Новый QR-код нужно будет создать заново.')) return;
+            fetch('/api/revoke_qr', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-Token': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({
-                    expiry_seconds: expirySeconds
-                })
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': '{{ csrf_token }}' },
+                body: JSON.stringify({ diploma_id: selectedDiplomaId })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    const tempUrl = data.link;
-                    currentQRUrl = tempUrl;
-                    
-                    fetch('/api/generate_qr', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-Token': '{{ csrf_token }}'
-                        },
-                        body: JSON.stringify({url: tempUrl})
-                    })
-                    .then(response => response.json())
-                    .then(qrData => {
-                        if (qrData.success) {
-                            document.getElementById('qr-image').src = qrData.qr_image;
-                            
-                            let message = '';
-                            if (days > 0 && hours > 0) {
-                                message = `${days} дн. ${hours} ч.`;
-                            } else if (days > 0) {
-                                message = `${days} дн.`;
-                            } else if (hours > 0) {
-                                message = `${hours} ч.`;
-                            } else {
-                                message = `1 мин.`;
-                            }
-                            document.getElementById('share-link').innerHTML = `QR-код действителен: ${message}`;
-                            document.getElementById('qr-container').style.display = 'block';
-                            showToast(`QR-код создан! Действует ${message}`);
-                        } else {
-                            showToast(qrData.message || 'Ошибка при создании QR-кода', true);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Fetch error:', error);
-                        showToast('Ошибка при создании QR-кода', true);
-                    });
+                    showToast('QR-код отозван');
+                    document.getElementById('qr-container').style.display = 'none';
+                    currentQRUrl = '';
                 } else {
-                    showToast(data.message || 'Ошибка при создании ссылки', true);
+                    showToast(data.message || 'Ошибка при отзыве QR-кода', true);
                 }
             })
-            .catch(error => {
-                console.error('Fetch error:', error);
-                showToast('Ошибка при создании ссылки', true);
-            });
+            .catch(() => showToast('Ошибка при отзыве QR-кода', true));
         }
-        
+
+        function calculateExpiry(prefix) {
+            let days = parseInt(document.getElementById(`${prefix}-days`).value) || 0;
+            let hours = parseInt(document.getElementById(`${prefix}-hours`).value) || 0;
+            days = Math.min(Math.max(days, 0), 30);
+            hours = Math.min(Math.max(hours, 0), 23);
+            document.getElementById(`${prefix}-days`).value = days;
+            document.getElementById(`${prefix}-hours`).value = hours;
+            let totalHours = (days * 24) + hours;
+            if (totalHours < 0.0167) totalHours = 0.0167;
+            return { days, hours, expirySeconds: Math.floor(totalHours * 60 * 60) };
+        }
+
+        function formatExpiry(days, hours) {
+            if (days > 0 && hours > 0) return `${days} дн. ${hours} ч.`;
+            if (days > 0) return `${days} дн.`;
+            if (hours > 0) return `${hours} ч.`;
+            return '1 мин.';
+        }
+
+        function generateQR() {
+            const { days, hours, expirySeconds } = calculateExpiry('qr-expiry');
+            fetch('/api/generate_temp_link', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': '{{ csrf_token }}' },
+                body: JSON.stringify({ expiry_seconds: expirySeconds, diploma_id: selectedDiplomaId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    showToast(data.message || 'Ошибка при создании ссылки', true);
+                    return;
+                }
+                currentQRUrl = data.link;
+                fetch('/api/generate_qr', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': '{{ csrf_token }}' },
+                    body: JSON.stringify({ url: data.link })
+                })
+                .then(response => response.json())
+                .then(qrData => {
+                    if (!qrData.success) {
+                        showToast(qrData.message || 'Ошибка при создании QR-кода', true);
+                        return;
+                    }
+                    document.getElementById('qr-image').src = qrData.qr_image;
+                    document.getElementById('share-link').innerHTML = `QR-код действителен: ${formatExpiry(days, hours)}`;
+                    document.getElementById('qr-container').style.display = 'block';
+                    showToast(`QR-код создан! Действует ${formatExpiry(days, hours)}`);
+                })
+                .catch(() => showToast('Ошибка при создании QR-кода', true));
+            })
+            .catch(() => showToast('Ошибка при создании ссылки', true));
+        }
+
+        function generateTempLink() {
+            const { days, hours, expirySeconds } = calculateExpiry('expiry');
+            fetch('/api/generate_temp_link', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': '{{ csrf_token }}' },
+                body: JSON.stringify({ expiry_seconds: expirySeconds, diploma_id: selectedDiplomaId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    showToast(data.message || 'Ошибка при создании ссылки', true);
+                    return;
+                }
+                navigator.clipboard.writeText(data.link);
+                showToast(`Ссылка скопирована! Действует ${formatExpiry(days, hours)}`);
+            })
+            .catch(() => showToast('Ошибка при создании ссылки', true));
+        }
+
         function downloadQR() {
             const img = document.getElementById('qr-image');
-            if (!img.src) {
+            const diploma = currentDiploma();
+            if (!img.src || !diploma) {
                 showToast('Сначала сгенерируйте QR-код', true);
                 return;
             }
-            
             fetch(img.src)
                 .then(response => response.blob())
                 .then(blob => {
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `QR_${diplomaNumber.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
+                    a.download = `QR_${String(diploma.diploma_number).replace(/[^a-zA-Z0-9]/g, '_')}.png`;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
                     showToast('QR-код скачан');
                 })
-                .catch(error => {
-                    console.error('Ошибка при скачивании:', error);
-                    showToast('Не удалось скачать QR-код', true);
-                });
+                .catch(() => showToast('Не удалось скачать QR-код', true));
         }
-        
-        function generateTempLink() {
-            let days = parseInt(document.getElementById('expiry-days').value) || 0;
-            let hours = parseInt(document.getElementById('expiry-hours').value) || 0;
-            
-            if (days < 0) days = 0;
-            if (hours < 0) hours = 0;
-            
-            if (days > 30) {
-                days = 30;
-                document.getElementById('expiry-days').value = 30;
-                showToast('Максимум 30 дней', true);
-            }
-            if (hours > 23) {
-                hours = 23;
-                document.getElementById('expiry-hours').value = 23;
-                showToast('Часы не могут быть больше 23', true);
-            }
-            
-            let totalHours = (days * 24) + hours;
-            
-            if (totalHours < 0.0167) {
-                totalHours = 0.0167;
-                showToast('Минимальная длительность 1 минута', true);
-            }
-            
-            const expirySeconds = Math.floor(totalHours * 60 * 60);
-            
-            fetch('/api/generate_temp_link', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-Token': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({
-                    expiry_seconds: expirySeconds
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    navigator.clipboard.writeText(data.link);
-                    let message = '';
-                    if (days > 0 && hours > 0) {
-                        message = `Ссылка скопирована! Действует ${days} дн. ${hours} ч.`;
-                    } else if (days > 0) {
-                        message = `Ссылка скопирована! Действует ${days} дн.`;
-                    } else if (hours > 0) {
-                        message = `Ссылка скопирована! Действует ${hours} ч.`;
-                    } else {
-                        message = `Ссылка скопирована! Действует 1 мин.`;
-                    }
-                    showToast(message);
-                } else {
-                    showToast(data.message || 'Ошибка при создании ссылки', true);
-                }
-            })
-            .catch(error => {
-                console.error('Ошибка:', error);
-                showToast('Ошибка при создании ссылки', true);
-            });
-        }
-        
+
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 e.preventDefault();
                 window.location.href = '/logout';
             }
         });
-        
+
+        renderDiplomaInfo();
+        refreshStatus();
         loadTheme();
-        
-        // Хоткеи для полей длительности временной ссылки
-        const expiryDays = document.getElementById('expiry-days');
-        const expiryHours = document.getElementById('expiry-hours');
-        
-        if (expiryDays) {
-            expiryDays.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    expiryHours.focus();
-                }
-            });
-            expiryDays.addEventListener('input', function() {
-                if (expiryDays.value === '' || expiryDays.value === null) {
-                    expiryDays.value = 0;
-                }
-            });
-        }
-        
-        if (expiryHours) {
-            expiryHours.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    generateTempLink();
-                }
-            });
-            expiryHours.addEventListener('input', function() {
-                if (expiryHours.value === '' || expiryHours.value === null) {
-                    expiryHours.value = 0;
-                }
-            });
-        }
-        
-        // Хоткеи для полей длительности QR
-        const qrExpiryDays = document.getElementById('qr-expiry-days');
-        const qrExpiryHours = document.getElementById('qr-expiry-hours');
-        
-        if (qrExpiryDays) {
-            qrExpiryDays.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    qrExpiryHours.focus();
-                }
-            });
-            qrExpiryDays.addEventListener('input', function() {
-                if (qrExpiryDays.value === '' || qrExpiryDays.value === null) {
-                    qrExpiryDays.value = 0;
-                }
-            });
-        }
-        
-        if (qrExpiryHours) {
-            qrExpiryHours.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    generateQR();
-                }
-            });
-            qrExpiryHours.addEventListener('input', function() {
-                if (qrExpiryHours.value === '' || qrExpiryHours.value === null) {
-                    qrExpiryHours.value = 0;
-                }
-            });
-        }
     </script>
 </body>
 </html>

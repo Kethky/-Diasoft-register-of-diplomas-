@@ -391,6 +391,19 @@
             });
         }
         
+
+        function downloadTextFile(filename, content) {
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
         function addDiploma() {
             const fio = document.getElementById('fio').value.trim();
             const year = document.getElementById('year').value.trim();
@@ -423,7 +436,17 @@
                     document.getElementById('spec').value = '';
                     document.getElementById('num').value = '';
                     loadDiplomas();
-                    alert("Диплом успешно добавлен");
+                    const message = [data.message || 'Диплом успешно добавлен'];
+                    if (data.student_secret) {
+                        message.push(`Пароль студента: ${data.student_secret}`);
+                    }
+                    if (data.existing_password_notice) {
+                        message.push(data.existing_password_notice);
+                    }
+                    alert(message.join('\n'));
+                    if (data.password_file_name && data.password_file_content) {
+                        downloadTextFile(data.password_file_name, data.password_file_content);
+                    }
                 } else {
                     alert(data.message || "Ошибка при добавлении");
                 }
@@ -468,9 +491,14 @@
                 if (data.success) {
                     resultDiv.innerHTML = `<div class="result-message success">
                         Загружено: ${data.added_count} дипломов<br>
+                        Новых аккаунтов: ${data.new_account_count}<br>
+                        С существующим аккаунтом: ${data.reused_account_count}<br>
                         Ошибок: ${data.error_count}
                         ${data.errors.length ? '<br><small>' + data.errors.join('<br>') + '</small>' : ''}
                     </div>`;
+                    if (data.password_file_name && data.password_file_content) {
+                        downloadTextFile(data.password_file_name, data.password_file_content);
+                    }
                     loadDiplomas();
                     setTimeout(() => closeExcelModal(), 3000);
                 } else {
